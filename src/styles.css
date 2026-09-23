@@ -727,7 +727,7 @@ button.bg-primary {
 @media (max-width: 680px) { .agenda-card { padding: 18px; } .agenda-day { grid-template-columns: 1fr; gap: 10px; } .agenda-block { grid-template-columns: 1fr; gap: 8px; } .agenda-time { display: flex; align-items: baseline; gap: 8px; } .agenda-week-empty { grid-template-columns: repeat(2, minmax(0, 1fr)); } .agenda-week-empty .agenda-day { min-height: 112px; } .agenda-compose-actions { align-items: stretch; flex-direction: column; } .agenda-compose-actions button { width: 100%; } }
 
 /* --- Streamlined three-mode layout --- */
-.mode-dock { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.mode-dock { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 
 /* Dashboard */
 .dashboard-view .section-heading { padding-bottom: 40px; }
