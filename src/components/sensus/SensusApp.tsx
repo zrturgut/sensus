@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
   ArrowRight, BookOpen, BrainCircuit, CalendarCheck, CalendarDays, Check, ChevronDown, Copy, Flag, Gauge, Goal, LayoutDashboard, LoaderCircle,
-  Mic, Pencil, Plus, Search, ShieldCheck, Sparkles, Square, Target, Trash2, Waves, X,
+  Mic, Pencil, Plus, Search, ShieldCheck, Sparkles, Square, Target, Timer, Trash2, TrendingUp, Waves, X,
 } from "lucide-react";
 import logoAsset from "@/assets/sensus-logo.png.asset.json";
 import { analyzeSensusInput, type ClarityResult, type StressBand } from "@/services/nebius";
@@ -17,7 +17,7 @@ import { toast } from "sonner";
 
 const example = "I have three major deliverables due this week and I keep thinking everyone will realize I am not capable. I am over-preparing every detail, avoiding asking for help, and staying online late, but I still feel behind. Next week I want to ship the beta and still protect two evenings.";
 
-type Mode = "home" | "reflect" | "week" | "execute";
+type Mode = "home" | "reflect" | "week" | "progress" | "execute";
 type GoalItem = { id: string; title: string; category: string; date: string; status: "In momentum" | "Refining" | "Achieved"; roadmap?: ExecutionRoadmap };
 type Reflection = { id: string; text: string; result?: ClarityResult; guidanceMessage?: string; followUpPrompts?: string[]; gentleFocus?: string; createdAt: string };
 type ActionEdits = { removed: string[]; custom: string[]; renamed: Record<string, string> };
@@ -84,7 +84,7 @@ function formatTime(seconds: number) { return `${String(Math.floor(seconds / 60)
 function useAtmosphericPointer() {
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const selector = ".section-heading, .vision-hero, .voice-panel, .goal-builder, .insight-card, .agenda-card, .agenda-composer, .history-card, .settings-dialog, .listening-card, .empty-insights, .history-empty";
+    const selector = ".section-heading, .vision-hero, .voice-panel, .goal-builder, .insight-card, .agenda-card, .agenda-composer, .history-card, .settings-dialog, .listening-card, .empty-insights, .history-empty, .progress-goal-card, .dash-progress";
     let frame = 0;
     let pending: { target: HTMLElement; x: number; y: number } | null = null;
     const paint = () => {
@@ -133,6 +133,7 @@ export function SensusApp() {
         <button className={mode === "home" ? "mode-option active" : "mode-option"} onClick={() => setMode("home")}><LayoutDashboard className="size-4" /><span>Dashboard</span></button>
         <button className={mode === "reflect" ? "mode-option active" : "mode-option"} onClick={() => setMode("reflect")}><Mic className="size-4" /><span>Reflect</span></button>
         <button className={mode === "week" ? "mode-option active" : "mode-option"} onClick={() => setMode("week")}><CalendarDays className="size-4" /><span>My Week</span></button>
+        <button className={mode === "progress" ? "mode-option active" : "mode-option"} onClick={() => setMode("progress")}><TrendingUp className="size-4" /><span>Progress</span></button>
         <button className={mode === "execute" ? "mode-option active" : "mode-option"} onClick={() => setMode("execute")}><Target className="size-4" /><span>Execution</span></button>
       </nav>
       {mode === "home"
@@ -141,7 +142,9 @@ export function SensusApp() {
         ? <ReflectView reflections={reflections} setReflections={setReflections} goals={goals} setGoals={setGoals} setPlan={setPlan} onScheduled={() => setMode("week")} />
         : mode === "week"
           ? <WeekView goals={goals} setGoals={setGoals} plan={plan} setPlan={setPlan} reflections={reflections} onSpeak={() => setMode("reflect")} />
-          : <ExecuteView goals={goals} setGoals={setGoals} />}
+          : mode === "progress"
+            ? <ProgressView goals={goals} plan={plan} onNavigate={setMode} />
+            : <ExecuteView goals={goals} setGoals={setGoals} />}
       <div className="safety-note app-footer-note"><ShieldCheck className="size-4" /><p><b>Responsible AI:</b> Sensus is a non-clinical tool for cognitive productivity, not therapy or medical advice. Your reflections stay in this browser; text and audio are sent to AI providers for analysis and transcription only, and are not retained by Sensus.</p></div>
     </main>
   </div>;
@@ -198,6 +201,72 @@ function DashboardView({ goals, plan, reflections, onNavigate }: { goals: GoalIt
       <div className="dash-card-head"><div><span className="mini-label"><BrainCircuit className="size-3.5" /> LATEST SIGNAL</span><h3>{latest.detected_distortion} · {latest.stress_band}</h3></div><Button variant="ghost" size="sm" onClick={() => onNavigate("reflect")}>Reflect again<ArrowRight className="size-3.5" /></Button></div>
       <blockquote>“{latest.reframe}”</blockquote>
     </article>}
+  </section>;
+}
+
+/** Per-goal progress: completed agenda blocks, time invested, and distance to completion. */
+function ProgressView({ goals, plan, onNavigate }: { goals: GoalItem[]; plan: WeekPlan | null; onNavigate: (mode: Mode) => void }) {
+  const stats = useMemo(() => {
+    const blocks = plan?.blocks ?? [];
+    const now = Date.now();
+    const words = (value: string) => value.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length >= 4);
+    const matches = (goalTitle: string, blockTitle: string) => {
+      const a = goalTitle.trim().toLowerCase();
+      const b = blockTitle.trim().toLowerCase();
+      if (!a || !b) return false;
+      if (a.includes(b) || b.includes(a)) return true;
+      const blockWords = new Set(words(b));
+      return words(a).filter((word) => blockWords.has(word)).length >= 2;
+    };
+    const claimed = new Set<string>();
+    return goals.map((goal) => {
+      const linked = blocks.filter((block) => !claimed.has(block.id) && matches(goal.title, block.goalTitle) && (claimed.add(block.id), true));
+      const doneBlocks = linked.filter((block) => block.done);
+      const minutesDone = doneBlocks.reduce((sum, block) => sum + block.durationMinutes, 0);
+      const minutesTotal = linked.reduce((sum, block) => sum + block.durationMinutes, 0);
+      const milestones = goal.roadmap?.milestones ?? [];
+      const milestonesHit = milestones.filter((milestone) => new Date(milestone.dueDate).getTime() <= now).length;
+      const blockShare = linked.length ? doneBlocks.length / linked.length : 0;
+      const milestoneShare = milestones.length ? milestonesHit / milestones.length : blockShare;
+      const completion = Math.round((milestones.length ? (blockShare + milestoneShare) / 2 : blockShare) * 100);
+      return { goal, linked, doneBlocks, minutesDone, minutesTotal, milestones, milestonesHit, completion };
+    });
+  }, [goals, plan]);
+
+  const withWork = stats.filter((entry) => entry.linked.length > 0 || entry.milestones.length > 0);
+  const totalMinutes = stats.reduce((sum, entry) => sum + entry.minutesDone, 0);
+  const overall = stats.length ? Math.round(stats.reduce((sum, entry) => sum + entry.completion, 0) / stats.length) : 0;
+  const hours = Math.floor(totalMinutes / 60);
+  const timeLabel = hours ? `${hours}h ${totalMinutes % 60 ? `${totalMinutes % 60}m` : ""}`.trim() : `${totalMinutes}m`;
+
+  return <section className="view-enter progress-view">
+    <div className="section-heading"><div><span className="eyebrow"><TrendingUp className="size-3.5" /> PROGRESS</span><h1>Every goal,<br /><span>measured.</span></h1></div><p>Completed blocks, hours invested, and how close each ambition is to done.</p></div>
+
+    <article className="dash-progress">
+      <div className="dash-progress-top"><div><span className="mini-label"><Gauge className="size-3.5" /> OVERALL MOMENTUM</span><h2>{goals.length ? `${overall}% average completion` : "No goals yet"}</h2></div>{goals.length > 0 && <strong className="dash-progress-count">{timeLabel}<span className="dash-progress-unit"> invested</span></strong>}</div>
+      <div className="dash-meter" role="progressbar" aria-valuenow={overall} aria-valuemin={0} aria-valuemax={100} aria-label="Overall goal completion"><i style={{ width: `${overall}%` }} /></div>
+      <p className="dash-progress-sub">{withWork.length ? `${withWork.length} of ${goals.length} goals have scheduled work or milestones behind them.` : "Schedule your week or build a roadmap and progress will start counting."}</p>
+    </article>
+
+    {stats.length ? <div className="progress-goal-list">{stats.map(({ goal, linked, doneBlocks, minutesDone, minutesTotal, milestones, milestonesHit, completion }) => {
+      const h = Math.floor(minutesDone / 60);
+      const spent = h ? `${h}h ${minutesDone % 60 ? `${minutesDone % 60}m` : ""}`.trim() : `${minutesDone}m`;
+      return <article className="progress-goal-card" key={goal.id}>
+        <div className="progress-goal-head">
+          <div><span className="mini-label"><Goal className="size-3" /> {goal.category.toUpperCase()} · {goal.status.toUpperCase()}</span><h3>{goal.title}</h3></div>
+          <strong className={completion >= 100 ? "progress-pct complete" : "progress-pct"}>{completion}%</strong>
+        </div>
+        <div className="dash-meter slim" role="progressbar" aria-valuenow={completion} aria-valuemin={0} aria-valuemax={100} aria-label={`${goal.title} completion`}><i style={{ width: `${completion}%` }} /></div>
+        <div className="progress-goal-stats">
+          <span><Check className="size-3.5" />{doneBlocks.length}/{linked.length} blocks done</span>
+          <span><Timer className="size-3.5" />{minutesTotal ? `${spent} of ${Math.round(minutesTotal / 60 * 10) / 10}h scheduled` : `${spent} invested`}</span>
+          {milestones.length > 0 && <span><Flag className="size-3.5" />{milestonesHit}/{milestones.length} milestones reached</span>}
+        </div>
+        {doneBlocks.length > 0 && <ul className="progress-done-list">{doneBlocks.slice(0, 4).map((block) => <li key={block.id}><Check className="size-3" /><b>{block.title}</b><span>{block.dayLabel} · {block.durationMinutes} min</span></li>)}{doneBlocks.length > 4 && <li className="progress-more">+{doneBlocks.length - 4} more completed</li>}</ul>}
+        {linked.length === 0 && milestones.length === 0 && <p className="progress-empty-hint">No scheduled blocks or milestones yet — link this goal into your week to start measuring.</p>}
+      </article>;
+    })}</div>
+      : <div className="dash-empty progress-empty"><Target className="size-5" /><span>Name a goal on the Execution tab and Sensus will track it here.</span><Button variant="glass" size="sm" onClick={() => onNavigate("execute")}>Open execution<ArrowRight className="size-3.5" /></Button></div>}
   </section>;
 }
 
