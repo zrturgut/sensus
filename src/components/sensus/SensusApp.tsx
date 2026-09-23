@@ -7,7 +7,7 @@ import {
 import logoAsset from "@/assets/sensus-logo.png.asset.json";
 import { analyzeSensusInput, type ClarityResult, type StressBand } from "@/services/nebius";
 import { Button } from "./Button";
-import { CalendarActions } from "./CalendarActions";
+import { CalendarActions, CalendarBulkActions } from "./CalendarActions";
 import { recordWav } from "./record-wav";
 import { generateFollowUpPrompts } from "@/lib/follow-up.functions";
 import { generateExecutionRoadmap, type ExecutionRoadmap } from "@/lib/roadmap.functions";
@@ -646,6 +646,7 @@ function ExecuteView({ goals, setGoals }: { goals: GoalItem[]; setGoals: (v: Goa
       {featured?.roadmap && <>
         <div className="woop-grid"><div><span>01 · THE DREAM</span><p>{featured.roadmap.dream}</p></div><div><span>02 · INTERNAL FRICTION</span><p>{featured.roadmap.internal_friction}</p></div><div><span>03 · IF—THEN BRIDGE</span><p>{featured.roadmap.if_then_plan}</p><CalendarActions title={`Sensus: ${featured.title}`} /></div></div>
         <div className="roadmap-block view-enter"><div className="roadmap-head"><div><span className="eyebrow">EXECUTION ROADMAP</span><h3>{featured.roadmap.milestones.length} milestones · {featured.roadmap.horizonWeeks} weeks</h3></div><p>{featured.roadmap.weeklyCommitment}</p></div>
+          <div className="bulk-calendar-row"><CalendarBulkActions items={featured.roadmap.milestones.flatMap((milestone) => [{ title: `${featured.title}: ${milestone.title}`, when: milestone.dueDate, details: milestone.outcome }, { title: `First step — ${milestone.firstAction}`, when: milestone.dueDate, details: `${featured.title} · ${milestone.title}` }])} label={`Add all ${featured.roadmap.milestones.length * 2} steps to calendar`} subject="roadmap steps" /></div>
           <ol className="milestone-list">{featured.roadmap.milestones.map((milestone, index) => <li key={milestone.title}><div className="milestone-index">{String(index + 1).padStart(2, "0")}</div><div className="milestone-body"><div className="milestone-top"><b>{milestone.title}</b><span className="milestone-due"><CalendarDays className="size-3.5" />{milestone.dueLabel}</span></div><p>{milestone.outcome}</p><p className="milestone-action"><ArrowRight className="size-3.5" />{milestone.firstAction}</p><CalendarActions title={`${featured.title}: ${milestone.title}`} when={milestone.dueDate} compact /></div></li>)}</ol>
         </div>
       </>}
@@ -676,7 +677,9 @@ function ActionsCard({ items, completed, onToggle, onAdd, onRemove, onRename }: 
   const [editValue, setEditValue] = useState("");
   const [draft, setDraft] = useState("");
   const submit = () => { if (!draft.trim()) return; onAdd(draft.trim()); setDraft(""); };
+  const pending = items.filter((item) => !completed.includes(item.label));
   return <article className="insight-card actions-card"><div className="card-top"><span className="icon-box mint"><CalendarCheck /></span><span className="mini-label">ACTION EXECUTION</span></div>
+    {pending.length > 0 && <div className="bulk-calendar-row"><CalendarBulkActions items={pending.map((item) => ({ title: item.label, details: "Small step from your Sensus reflection" }))} label={`Add all ${pending.length} steps to calendar`} subject="steps" /></div>}
     <div className="action-list">{items.length ? items.map((item) => <div className="action-item" key={item.key}>{editingKey === item.key
       ? <><input className="action-edit" value={editValue} onChange={(event) => setEditValue(event.target.value)} aria-label="Edit action item" autoFocus /><Button variant="icon" size="icon" aria-label="Save action item" onClick={() => { if (editValue.trim()) onRename(item.key, editValue.trim(), item.custom); setEditingKey(null); }}><Check className="size-3.5" /></Button><Button variant="icon" size="icon" aria-label="Cancel action edit" onClick={() => setEditingKey(null)}><X className="size-3.5" /></Button></>
       : <><button aria-label={`Mark ${item.label} complete`} className={completed.includes(item.label) ? "check-box checked" : "check-box"} onClick={() => onToggle(item.label)}>{completed.includes(item.label) && <Check className="size-3" />}</button><span className={completed.includes(item.label) ? "done" : ""}>{item.label}</span><div className="action-tools"><CalendarActions title={item.label} compact /><Button variant="icon" size="icon" aria-label={`Edit ${item.label}`} title="Edit" onClick={() => { setEditingKey(item.key); setEditValue(item.label); }}><Pencil className="size-3.5" /></Button><ConfirmRemove label={item.label} onConfirm={() => onRemove(item.key, item.custom)} /></div></>}</div>)
