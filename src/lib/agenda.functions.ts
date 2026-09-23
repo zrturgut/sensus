@@ -2,6 +2,9 @@ import { createServerFn } from "@tanstack/react-start";
 import { stepCountIs, streamText, tool } from "ai";
 import { z } from "zod";
 import { createResponsesGateway } from "./ai-gateway.server";
+import { safeGatewayMessage } from "./gateway-errors";
+
+const MODEL = "openai/gpt-6-astra";
 
 const inputSchema = z.object({
   reflection: z.string().min(40).max(12000),
@@ -17,29 +20,30 @@ export type AgendaBlock = {
   startsAt: string;
   dayLabel: string;
   timeLabel: string;
+  done?: boolean;
 };
 
 export type AgendaGoal = { title: string; category: string; existingGoalId: string | null };
+
+export type PlanMeta = {
+  model: string;
+  toolCalls: number;
+  goalsLinked: number;
+  goalsCreated: number;
+  blocksScheduled: number;
+  latencyMs: number;
+};
 
 export type WeekPlan = {
   summary: string;
   goals: AgendaGoal[];
   blocks: AgendaBlock[];
+  meta: PlanMeta;
   createdAt: string;
   source: "lovable-ai";
 };
 
 export type AgendaResult = { ok: true; plan: WeekPlan } | { ok: false; error: string };
-
-function safeGatewayMessage(error: unknown) {
-  const value = error as { statusCode?: number };
-  if (value.statusCode === 402) return "Week planning is paused because AI credits are unavailable. Add credits in workspace billing to continue.";
-  if (value.statusCode === 401) return "Week planning is not configured yet for this project.";
-  if (value.statusCode === 403) return "Week planning is currently unavailable for this workspace.";
-  if (value.statusCode === 429) return "Week planning is resting after high demand. Please try again in a moment.";
-  if (value.statusCode && value.statusCode >= 500) return "Week planning is temporarily unavailable. Please try again shortly.";
-  return "Sensus could not build your week right now. Please try again.";
-}
 
 const CATEGORIES = ["Career", "Fitness", "Mindset", "Creative"];
 
@@ -59,17 +63,20 @@ export const planWeekFromReflection = createServerFn({ method: "POST" })
     const blocks: AgendaBlock[] = [];
     const midnight = new Date();
     midnight.setHours(0, 0, 0, 0);
+    const startedAt = Date.now();
+    let toolCalls = 0;
 
     try {
       const lovable = createResponsesGateway(key);
       const result = streamText({
-        model: lovable.responses("openai/gpt-6-astra"),
+        model: lovable.responses(MODEL),
         stopWhen: stepCountIs(50),
         tools: {
           list_existing_goals: tool({
             description: "List the goals the person already tracks in Sensus, with their ids and categories.",
             inputSchema: z.object({}),
             execute: async () => ({
+              toolCalls: ++toolCalls,
               goals: known.length > 0 ? known : [{ id: "none", title: "No goals tracked yet", category: "none" }],
             }),
           }),
@@ -82,6 +89,7 @@ export const planWeekFromReflection = createServerFn({ method: "POST" })
               existing_goal_id: z.string().nullable().describe("Id from list_existing_goals, or null for a new goal."),
             }),
             execute: async ({ title, category, existing_goal_id }) => {
+              toolCalls += 1;
               const trimmed = title.trim();
               if (!trimmed) return { ok: false, reason: "empty title" };
               const existing = known.find((goal) => goal.id === existing_goal_id) ?? null;
@@ -102,6 +110,7 @@ export const planWeekFromReflection = createServerFn({ method: "POST" })
               duration_minutes: z.number().describe("Realistic length, 15 to 120."),
             }),
             execute: async ({ title, goal_title, why, day_offset, start_time, duration_minutes }) => {
+              toolCalls += 1;
               if (blocks.length >= 12) return { ok: false, reason: "agenda is full" };
               const offset = Math.min(7, Math.max(1, Math.round(Number.isFinite(day_offset) ? day_offset : 1)));
               const [rawHour, rawMinute] = start_time.split(":");
@@ -149,12 +158,20 @@ export const planWeekFromReflection = createServerFn({ method: "POST" })
           summary: summary || "Your week is mapped into short, realistic blocks.",
           goals,
           blocks,
+          meta: {
+            model: MODEL,
+            toolCalls,
+            goalsLinked: goals.filter((goal) => goal.existingGoalId).length,
+            goalsCreated: goals.filter((goal) => !goal.existingGoalId).length,
+            blocksScheduled: blocks.length,
+            latencyMs: Date.now() - startedAt,
+          },
           createdAt: new Date().toISOString(),
           source: "lovable-ai",
         },
       };
     } catch (error) {
       console.error("Week planning failed", error);
-      return { ok: false, error: safeGatewayMessage(error) };
+      return { ok: false, error: safeGatewayMessage(error, "Week planning") };
     }
   });

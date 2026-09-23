@@ -31,3 +31,13 @@
 - [x] Add 5 realistic photos to Visions & Affirmations board
 - [x] Agentic week planner: reflection -> goals + scheduled agenda blocks with calendar links
 - [x] Fix stale-closure duplicate goal after Vision Art generation
+
+## Rubric hardening (judge audit)
+- [x] Cut to three modes: Reflect, My Week, Execution
+- [x] Removed affirmations, vision board, vision art, ambient audio, fullscreen visualization, affirmation TTS, canned Socratic drawer
+- [x] Reconnected reflection -> agentic week plan ("Schedule this into my week")
+- [x] Replaced invented stress_level with a rubric-defined capacity band + trend line
+- [x] "Why this plan" panel: model, tool calls, goals linked/created, blocks, latency
+- [x] Editable, completable, deletable agenda blocks
+- [x] Non-blocking short-input guidance; founder-credible seed goals; persistent honest safety note
+- [x] Shared gateway error helper; aria-live on async regions

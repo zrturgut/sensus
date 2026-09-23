@@ -1,51 +1,37 @@
-import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import * as Dialog from "@radix-ui/react-dialog";
 import {
-  ArrowRight, BookOpen, BrainCircuit, CalendarCheck, CalendarDays, Check, ChevronDown, Copy, Eye, Gauge, Goal, Headphones, Heart,
-  LayoutDashboard, LoaderCircle, Maximize2, Mic, Pencil, Pin, Plus, RefreshCw, Search, Settings, ShieldCheck, Sparkles, Square, Target, Trash2, Volume2, Waves, X,
+  ArrowRight, BookOpen, BrainCircuit, CalendarCheck, CalendarDays, Check, ChevronDown, Copy, Gauge, Goal, LoaderCircle,
+  Mic, Pencil, Plus, Search, Settings, ShieldCheck, Sparkles, Square, Target, Trash2, Waves, X,
 } from "lucide-react";
 import logoAsset from "@/assets/sensus-logo.png.asset.json";
-import runnerImage from "@/assets/vision-runner.jpg";
-import studioImage from "@/assets/vision-studio.jpg";
-import mountainImage from "@/assets/vision-mountain.jpg";
-import seasideImage from "@/assets/vision-seaside.jpg";
-import atelierImage from "@/assets/vision-atelier.jpg";
-import { analyzeSensusInput, type ClarityResult, type GoalResult } from "@/services/nebius";
+import { analyzeSensusInput, type ClarityResult, type StressBand } from "@/services/nebius";
 import { Button } from "./Button";
 import { CalendarActions } from "./CalendarActions";
 import { recordWav } from "./record-wav";
-import { startAmbientAudio, type AmbientAudio } from "@/lib/ambient-audio";
 import { generateFollowUpPrompts } from "@/lib/follow-up.functions";
 import { generateExecutionRoadmap, type ExecutionRoadmap } from "@/lib/roadmap.functions";
 import { planWeekFromReflection, type WeekPlan } from "@/lib/agenda.functions";
 
-const presets = [
-  { icon: "⚡", label: "Work overload & imposter loop", text: "I have three major deliverables due this week and I keep thinking everyone will realize I am not capable. I am over-preparing every detail, avoiding asking for help, and staying online late, but I still feel behind." },
-  { icon: "🌅", label: "Morning burnout & routine friction", text: "I wake up already tired and then feel guilty that my morning routine falls apart. I try to fit exercise, planning, and deep work in before the day starts, but the pressure makes me avoid all of it." },
-];
-const affirmationVariations = [
-  "I turn pressure into clear priorities and meet today with steady self-trust.",
-  "I am capable, grounded, and free to grow through progress rather than perfection.",
-  "I choose courageous action, protect my energy, and let consistency carry my vision forward.",
-  "I welcome today’s opportunities with an open heart, a clear mind, and purposeful momentum.",
-];
+const example = "I have three major deliverables due this week and I keep thinking everyone will realize I am not capable. I am over-preparing every detail, avoiding asking for help, and staying online late, but I still feel behind. Next week I want to ship the beta and still protect two evenings.";
 
-type Mode = "clarity" | "agenda" | "vision" | "board" | "history";
-type GoalItem = { id: string; title: string; category: string; date: string; status: "In momentum" | "Refining" | "Achieved"; analysis?: GoalResult; roadmap?: ExecutionRoadmap; imageUrl?: string; imagePrompt?: string };
+type Mode = "reflect" | "week" | "execute";
+type GoalItem = { id: string; title: string; category: string; date: string; status: "In momentum" | "Refining" | "Achieved"; roadmap?: ExecutionRoadmap };
 type Reflection = { id: string; text: string; result?: ClarityResult; guidanceMessage?: string; followUpPrompts?: string[]; gentleFocus?: string; createdAt: string };
-type AffirmationTile = { id: string; text: string; prompt?: string; title?: string; imageQuery?: string; createdAt: string; palette: number; favorite?: boolean };
 type ActionEdits = { removed: string[]; custom: string[]; renamed: Record<string, string> };
 type ActionEntry = { key: string; label: string; custom: boolean };
+
 const initialGoals: GoalItem[] = [
-  { id: "run", title: "Run a half-marathon", category: "Fitness", date: "Nov 16", status: "In momentum" },
-  { id: "ship", title: "Ship the AI product", category: "Career", date: "Oct 30", status: "Refining" },
-  { id: "clarity", title: "Protect a clear mind", category: "Mindset", date: "Daily", status: "In momentum" },
-  { id: "sea", title: "Live and work near the ocean", category: "Mindset", date: "2027", status: "Refining" },
-  { id: "atelier", title: "Fill a canvas every month", category: "Creative", date: "Monthly", status: "In momentum" },
+  { id: "beta", title: "Ship v1 to 10 design partners", category: "Career", date: "Oct 30", status: "In momentum" },
+  { id: "hours", title: "Keep my week under 55 hours", category: "Mindset", date: "Weekly", status: "Refining" },
 ];
-const images = [runnerImage, studioImage, mountainImage, seasideImage, atelierImage];
+
+const BAND_COPY: Record<StressBand, { hint: string; width: string }> = {
+  Steady: { hint: "Pressure is real, but your resources still match the demand.", width: "33%" },
+  Strained: { hint: "Demand is outrunning recovery. Protect one thing this week.", width: "66%" },
+  Depleted: { hint: "Energy is already spent. Recovery is the productive move.", width: "100%" },
+};
 
 function useStoredState<T>(key: string, initial: T) {
   const [value, setValue] = useState(initial);
@@ -55,6 +41,41 @@ function useStoredState<T>(key: string, initial: T) {
   return [value, setValue] as const;
 }
 
+/** Shared push-to-talk: records, transcribes, and appends the words to existing text. */
+function useDictation(append: (spoken: string) => void, onError: (message: string) => void) {
+  const recorder = useRef<Awaited<ReturnType<typeof recordWav>> | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [seconds, setSeconds] = useState(0);
+  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const toggle = async () => {
+    if (!recording) {
+      try { recorder.current = await recordWav(); setRecording(true); setSeconds(0); timer.current = setInterval(() => setSeconds((n) => n + 1), 1000); }
+      catch { onError("Microphone access is needed to record."); }
+      return;
+    }
+    setRecording(false);
+    if (timer.current) clearInterval(timer.current);
+    timer.current = null;
+    try {
+      const file = await recorder.current?.stop();
+      recorder.current = null;
+      if (!file) return;
+      setTranscribing(true);
+      const form = new FormData();
+      form.append("audio", file);
+      const response = await fetch("/api/transcribe", { method: "POST", body: form });
+      const body = await response.json() as { text?: string; error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Transcription failed.");
+      const spoken = body.text?.trim();
+      if (spoken) append(spoken);
+    } catch (caught) { onError(caught instanceof Error ? caught.message : "Transcription failed."); }
+    finally { setTranscribing(false); }
+  };
+  useEffect(() => () => { if (timer.current) clearInterval(timer.current); }, []);
+  return { recording, transcribing, seconds, toggle };
+}
+
 function LogoMark() { return <img src={logoAsset.url} alt="Sensus" className="logo-image" width={148} height={49} />; }
 function SourcePill({ source }: { source: "nebius" | "demo" }) { return <span className={source === "nebius" ? "source-pill source-live" : "source-pill"}>{source === "nebius" ? "Live reasoning" : "Demo reasoning"}</span>; }
 function formatTime(seconds: number) { return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`; }
@@ -62,10 +83,9 @@ function formatTime(seconds: number) { return `${String(Math.floor(seconds / 60)
 function useAtmosphericPointer() {
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const selector = ".section-heading, .vision-hero, .voice-panel, .goal-builder, .insight-card, .affirmation-capsule, .vision-card, .affirmation-composer, .follow-up-composer, .history-card, .settings-dialog, .listening-card, .empty-insights, .history-empty";
+    const selector = ".section-heading, .vision-hero, .voice-panel, .goal-builder, .insight-card, .agenda-card, .agenda-composer, .history-card, .settings-dialog, .listening-card, .empty-insights, .history-empty";
     let frame = 0;
     let pending: { target: HTMLElement; x: number; y: number } | null = null;
-    let touchTimer: ReturnType<typeof setTimeout> | null = null;
     const paint = () => {
       frame = 0;
       if (!pending) return;
@@ -76,131 +96,215 @@ function useAtmosphericPointer() {
       target.dataset["pointerGlow"] = "true";
       pending = null;
     };
-    const queue = (target: HTMLElement, x: number, y: number) => {
-      pending = { target, x, y };
-      if (!frame) frame = requestAnimationFrame(paint);
-    };
     const onPointerMove = (event: PointerEvent) => {
       if (event.pointerType !== "mouse") return;
       const target = (event.target as Element | null)?.closest<HTMLElement>(selector);
-      if (target) queue(target, event.clientX, event.clientY);
+      if (!target) return;
+      pending = { target, x: event.clientX, y: event.clientY };
+      if (!frame) frame = requestAnimationFrame(paint);
     };
     const onPointerOut = (event: PointerEvent) => {
       const target = (event.target as Element | null)?.closest<HTMLElement>(selector);
       if (target && !target.contains(event.relatedTarget as Node | null)) delete target.dataset["pointerGlow"];
     };
-    const onPointerDown = (event: PointerEvent) => {
-      if (event.pointerType === "mouse") return;
-      const target = (event.target as Element | null)?.closest<HTMLElement>(selector);
-      if (!target) return;
-      queue(target, event.clientX, event.clientY);
-      target.dataset["touchGlow"] = "true";
-      if (touchTimer) clearTimeout(touchTimer);
-      touchTimer = setTimeout(() => delete target.dataset["touchGlow"], 420);
-    };
     document.addEventListener("pointermove", onPointerMove, { passive: true });
     document.addEventListener("pointerout", onPointerOut, { passive: true });
-    document.addEventListener("pointerdown", onPointerDown, { passive: true });
     return () => {
       document.removeEventListener("pointermove", onPointerMove);
       document.removeEventListener("pointerout", onPointerOut);
-      document.removeEventListener("pointerdown", onPointerDown);
       if (frame) cancelAnimationFrame(frame);
-      if (touchTimer) clearTimeout(touchTimer);
     };
   }, []);
 }
 
 export function SensusApp() {
   useAtmosphericPointer();
-  const [mode, setMode] = useState<Mode>("agenda");
+  const [mode, setMode] = useState<Mode>("week");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [goals, setGoals] = useStoredState<GoalItem[]>("sensus-goals", initialGoals);
   const [reflections, setReflections] = useStoredState<Reflection[]>("sensus-reflections", []);
-  const [affirmations, setAffirmations] = useStoredState<AffirmationTile[]>("sensus-affirmations", []);
-  useEffect(() => {
-    const removedTestTexts = ["hello. right now we are testing", "hello, bla bla bla"];
-    const cleaned = reflections.filter((item) => !removedTestTexts.includes(item.text.trim().toLowerCase()));
-    if (cleaned.length !== reflections.length) setReflections(cleaned);
-  }, [reflections, setReflections]);
+  const [plan, setPlan] = useStoredState<WeekPlan | null>("sensus-week-plan", null);
   return <div className="app-shell min-h-screen bg-background text-foreground"><div className="ambient-aurora" aria-hidden="true"><i className="aurora-sage" /><i className="aurora-lavender" /><i className="aurora-sky" /></div>
     <header className="app-header"><div className="header-inner">
-      <div className="brand"><LogoMark /><p>Voice-first clarity, grounded execution &amp; vision</p></div>
-      <div className="header-actions"><div className="status-cluster"><span className="status-badge"><i className="status-dot cyan" />Speech <b>ElevenLabs Scribe</b></span><span className="status-badge"><i className="status-dot mint" />Reasoning <b>Nebius GLM-5.3-Flash</b></span></div><Button variant="icon" size="icon" aria-label="Open settings" onClick={() => setSettingsOpen(true)}><Settings className="size-4" /></Button></div>
+      <div className="brand"><LogoMark /><p>Speak once. Get the pattern and a scheduled week.</p></div>
+      <div className="header-actions"><Button variant="icon" size="icon" aria-label="Open settings" onClick={() => setSettingsOpen(true)}><Settings className="size-4" /></Button></div>
     </div></header>
     <main className="main-shell">
-      <nav className="mode-dock" aria-label="Sensus modes"><button className={mode === "clarity" ? "mode-option active" : "mode-option"} onClick={() => setMode("clarity")}><Mic className="size-4" /><span>Clarity</span></button><button className={mode === "agenda" ? "mode-option active" : "mode-option"} onClick={() => setMode("agenda")}><CalendarDays className="size-4" /><span>Weekly Agenda</span></button><button className={mode === "vision" ? "mode-option active" : "mode-option"} onClick={() => setMode("vision")}><Target className="size-4" /><span>Execution</span></button><button className={mode === "board" ? "mode-option active" : "mode-option"} onClick={() => setMode("board")}><LayoutDashboard className="size-4" /><span>Vision Board</span></button><button className={mode === "history" ? "mode-option active" : "mode-option"} onClick={() => setMode("history")}><BookOpen className="size-4" /><span>History</span></button></nav>
-      {mode === "clarity" ? <ClarityView reflections={reflections} setReflections={setReflections} affirmations={affirmations} setAffirmations={setAffirmations} /> : mode === "agenda" ? <AgendaView goals={goals} setGoals={setGoals} /> : mode === "vision" ? <VisionView goals={goals} setGoals={setGoals} /> : mode === "board" ? <BoardView goals={goals} setGoals={setGoals} affirmations={affirmations} setAffirmations={setAffirmations} /> : <HistoryView reflections={reflections} setReflections={setReflections} />}
+      <nav className="mode-dock" aria-label="Sensus modes">
+        <button className={mode === "reflect" ? "mode-option active" : "mode-option"} onClick={() => setMode("reflect")}><Mic className="size-4" /><span>Reflect</span></button>
+        <button className={mode === "week" ? "mode-option active" : "mode-option"} onClick={() => setMode("week")}><CalendarDays className="size-4" /><span>My Week</span></button>
+        <button className={mode === "execute" ? "mode-option active" : "mode-option"} onClick={() => setMode("execute")}><Target className="size-4" /><span>Execution</span></button>
+      </nav>
+      {mode === "reflect"
+        ? <ReflectView reflections={reflections} setReflections={setReflections} goals={goals} setGoals={setGoals} setPlan={setPlan} onScheduled={() => setMode("week")} />
+        : mode === "week"
+          ? <WeekView goals={goals} setGoals={setGoals} plan={plan} setPlan={setPlan} onSpeak={() => setMode("reflect")} />
+          : <ExecuteView goals={goals} setGoals={setGoals} />}
+      <div className="safety-note app-footer-note"><ShieldCheck className="size-4" /><p><b>Responsible AI:</b> Sensus is a non-clinical tool for cognitive productivity, not therapy or medical advice. Your reflections stay in this browser; text and audio are sent to AI providers for analysis and transcription only, and are not retained by Sensus.</p></div>
     </main>
     <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
   </div>;
 }
 
-function ClarityView({ reflections, setReflections, affirmations, setAffirmations }: { reflections: Reflection[]; setReflections: (v: Reflection[]) => void; affirmations: AffirmationTile[]; setAffirmations: (v: AffirmationTile[]) => void }) {
+function ReflectView({ reflections, setReflections, goals, setGoals, setPlan, onScheduled }: {
+  reflections: Reflection[]; setReflections: (v: Reflection[]) => void; goals: GoalItem[]; setGoals: (v: GoalItem[]) => void; setPlan: (v: WeekPlan | null) => void; onScheduled: () => void;
+}) {
   const analyze = useServerFn(analyzeSensusInput);
-  const recorder = useRef<Awaited<ReturnType<typeof recordWav>> | null>(null);
-  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [recording, setRecording] = useState(false); const [seconds, setSeconds] = useState(0); const [text, setText] = useState("");
-  const [result, setResult] = useState<ClarityResult | null>(reflections.find((item) => item.result)?.result ?? null); const [loading, setLoading] = useState(false); const [error, setError] = useState(""); const [completed, setCompleted] = useStoredState<string[]>("sensus-actions", []); const [drawer, setDrawer] = useState(false); const [question, setQuestion] = useState("");
+  const planWeek = useServerFn(planWeekFromReflection);
+  const [text, setText] = useState("");
+  const [result, setResult] = useState<ClarityResult | null>(reflections.find((item) => item.result)?.result ?? null);
+  const [loading, setLoading] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
+  const [error, setError] = useState("");
   const [guidance, setGuidance] = useState("");
+  const [completed, setCompleted] = useStoredState<string[]>("sensus-actions", []);
   const [actionEdits, setActionEdits] = useStoredState<ActionEdits>("sensus-action-edits", { removed: [], custom: [], renamed: {} });
-  const [affirmationLoading, setAffirmationLoading] = useState(false); const [audioState, setAudioState] = useState<"idle" | "loading" | "playing">("idle"); const [affirmationNotice, setAffirmationNotice] = useState("");
-  const toggleRecording = async () => {
-    setError("");
-    if (!recording) { try { recorder.current = await recordWav(); setRecording(true); setSeconds(0); timer.current = setInterval(() => setSeconds((n) => n + 1), 1000); } catch { setError("Microphone access is needed to record a reflection."); } return; }
-    setRecording(false); if (timer.current) clearInterval(timer.current); timer.current = null;
-    try { const file = await recorder.current?.stop(); recorder.current = null; if (!file) return; setLoading(true); const form = new FormData(); form.append("audio", file); const response = await fetch("/api/transcribe", { method: "POST", body: form }); const body = await response.json() as { text?: string; error?: string }; if (!response.ok) throw new Error(body.error ?? "Transcription failed."); setText(body.text ?? ""); } catch (caught) { setError(caught instanceof Error ? caught.message : "Transcription failed."); } finally { setLoading(false); }
-  };
+  const dictation = useDictation((spoken) => setText((current) => `${current.trim()}${current.trim() ? " " : ""}${spoken}`), setError);
+
   const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
-  const enoughContext = text.trim().length >= 60 && wordCount >= 15;
-  const shortGuidance = "Tell Sensus a little more about what's on your mind, what happened today, or what feels heavy right now (at least a couple of sentences) so we can find the pattern.";
-  const runAnalysis = async () => { if (!enoughContext) { setGuidance(shortGuidance); setResult(null); return; } setLoading(true); setError(""); setGuidance(""); try { const next = await analyze({ data: { kind: "clarity", text } }); if (!("is_sufficient" in next)) throw new Error("Unexpected analysis response"); if (next.is_sufficient) { setResult(next); setReflections([{ id: crypto.randomUUID(), text, result: next, createdAt: new Date().toISOString() }, ...reflections].slice(0, 50)); } else { setResult(null); setGuidance(next.guidance_message); setReflections([{ id: crypto.randomUUID(), text, guidanceMessage: next.guidance_message, createdAt: new Date().toISOString() }, ...reflections].slice(0, 50)); } } catch { setError("Analysis is unavailable right now. Your reflection is still here."); } finally { setLoading(false); } };
-  const toggleAction = (action: string) => setCompleted(completed.includes(action) ? completed.filter((item) => item !== action) : [...completed, action]);
+  const runAnalysis = async () => {
+    if (!text.trim() || loading) return;
+    setLoading(true); setError(""); setGuidance("");
+    try {
+      const next = await analyze({ data: { text } });
+      const entry = { id: crypto.randomUUID(), text, createdAt: new Date().toISOString() };
+      if (next.is_sufficient) { setResult(next); setReflections([{ ...entry, result: next }, ...reflections].slice(0, 50)); }
+      else { setResult(null); setGuidance(next.guidance_message); setReflections([{ ...entry, guidanceMessage: next.guidance_message }, ...reflections].slice(0, 50)); }
+    } catch { setError("Analysis is unavailable right now. Your reflection is still here."); }
+    finally { setLoading(false); }
+  };
+  const scheduleWeek = async () => {
+    if (scheduling || text.trim().length < 40) { if (text.trim().length < 40) setError("Say a little more about the week ahead so Sensus can schedule it."); return; }
+    setScheduling(true); setError("");
+    try {
+      const response = await planWeek({ data: { reflection: text.trim(), goals: goals.map(({ id, title, category }) => ({ id, title, category })) } });
+      if (!response.ok) { setError(response.error); return; }
+      setPlan(response.plan);
+      const fresh = response.plan.goals.filter((item) => !item.existingGoalId && !goals.some((goal) => goal.title.trim().toLowerCase() === item.title.trim().toLowerCase()));
+      if (fresh.length) setGoals([...fresh.map((item) => ({ id: crypto.randomUUID(), title: item.title, category: item.category, date: "This week", status: "In momentum" as const })), ...goals]);
+      onScheduled();
+    } catch { setError("Week planning is unavailable right now.") }
+    finally { setScheduling(false); }
+  };
+
   const actionItems: ActionEntry[] = [
     ...(result?.action_items ?? []).filter((action) => !actionEdits.removed.includes(action)).map((action) => ({ key: action, label: actionEdits.renamed[action] ?? action, custom: false })),
     ...actionEdits.custom.map((action) => ({ key: `custom:${action}`, label: action, custom: true })),
   ];
-  const addAction = (label: string) => { if (actionEdits.custom.includes(label)) return; setActionEdits({ ...actionEdits, custom: [...actionEdits.custom, label] }); };
-  const removeAction = (key: string, custom: boolean) => custom
-    ? setActionEdits({ ...actionEdits, custom: actionEdits.custom.filter((item) => `custom:${item}` !== key) })
-    : setActionEdits({ ...actionEdits, removed: [...actionEdits.removed, key] });
-  const renameAction = (key: string, label: string, custom: boolean) => custom
-    ? setActionEdits({ ...actionEdits, custom: actionEdits.custom.map((item) => `custom:${item}` === key ? label : item) })
-    : setActionEdits({ ...actionEdits, renamed: { ...actionEdits.renamed, [key]: label } });
-  const pinAffirmation = () => { if (!result) return; const affirmation = result.positive_affirmation ?? "I meet this moment with clarity, self-trust, and the courage to shape what comes next."; if (affirmations.some((item) => item.text === affirmation)) { setAffirmationNotice("Already glowing on your Affirmation Wall."); return; } setAffirmations([{ id: crypto.randomUUID(), text: affirmation, prompt: result.manifestation_prompt, title: result.vision_tile_suggestion?.title, imageQuery: result.vision_tile_suggestion?.image_query, createdAt: new Date().toISOString(), palette: affirmations.length % 4, favorite: false }, ...affirmations]); setAffirmationNotice("Pinned to your Affirmation Wall."); };
-  const refreshAffirmation = async () => { if (!text.trim() || affirmationLoading) return; setAffirmationLoading(true); setAffirmationNotice(""); try { const next = await analyze({ data: { kind: "clarity", text: `${text}\nCreate a fresh affirmation variation for this moment.` } }); if ("reframe" in next && result) { const generated = next.positive_affirmation; const fresh = generated && generated !== result.positive_affirmation ? generated : affirmationVariations.find((item) => item !== result.positive_affirmation) ?? "I turn pressure into clear priorities and meet today with steady self-trust."; setResult({ ...result, positive_affirmation: fresh, affirmation_category: next.affirmation_category, vision_tile_suggestion: next.vision_tile_suggestion, manifestation_prompt: next.manifestation_prompt, source: next.source }); } } catch { setAffirmationNotice("A fresh affirmation is unavailable right now."); } finally { setAffirmationLoading(false); } };
-  const playAffirmation = async () => { if (!result || audioState !== "idle") return; setAudioState("loading"); setAffirmationNotice(""); try { const response = await fetch("/api/affirmation-speech", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: result.positive_affirmation ?? "I meet this moment with clarity and self-trust." }) }); if (!response.ok) { const body = await response.json().catch(() => null) as { error?: string } | null; throw new Error(body?.error ?? "Affirmation audio is unavailable."); } const url = URL.createObjectURL(await response.blob()); const audio = new Audio(url); audio.onended = () => { URL.revokeObjectURL(url); setAudioState("idle"); }; audio.onerror = () => { URL.revokeObjectURL(url); setAudioState("idle"); setAffirmationNotice("Audio playback could not start."); }; setAudioState("playing"); await audio.play(); } catch (caught) { setAudioState("idle"); setAffirmationNotice(caught instanceof Error ? caught.message : "Affirmation audio is unavailable."); } };
-  return <section className="view-enter"><div className="section-heading"><div><span className="eyebrow"><Sparkles className="size-3.5" /> DAILY REFLECTION</span><h1>Turn mental noise into<br/><span>clear next moves.</span></h1></div><p>Speak freely. Sensus finds the pattern beneath the pressure, then turns it into grounded action.</p></div>
+
+  return <section className="view-enter">
+    <div className="section-heading"><div><span className="eyebrow"><Sparkles className="size-3.5" /> DAILY REFLECTION</span><h1>Turn mental noise into<br /><span>clear next moves.</span></h1></div><p>Speak freely about today and the week ahead. Sensus finds the pattern, then turns it into a schedule you can keep.</p></div>
+
     <div className="voice-panel">
-      <div className="voice-stage"><div className={recording ? "record-aura active" : "record-aura"}><button className="record-button" aria-label={recording ? "Stop recording" : "Start recording"} onClick={toggleRecording}>{recording ? <Square className="size-7 fill-current" /> : <Mic className="size-8" />}</button></div><div className="record-copy"><b>{recording ? "Listening deeply" : loading ? "Processing reflection" : "Tap to speak"}</b><span>{recording ? formatTime(seconds) : "Your voice stays private and focused"}</span></div><Waveform active={recording} /></div>
-      <div className="transcript-side"><div className="panel-label"><span>Reflection transcript</span><span>{text.length} chars · {wordCount} words</span></div><textarea value={text} onChange={(event) => { setText(event.target.value); setGuidance(""); }} placeholder="What feels tangled right now? Speak or write without editing yourself..." /><div className="preset-row">{presets.map((preset) => <button key={preset.label} onClick={() => { setText(preset.text); setGuidance(""); }}><span>{preset.icon}</span>{preset.label}</button>)}</div><div className="analyze-row">{error && <p className="error-text">{error}</p>}{text.length > 0 && !enoughContext && <p className="context-hint">Add a few more details to analyze · {Math.max(0, 15 - wordCount)} words remaining</p>}<Button size="lg" onClick={runAnalysis} disabled={loading || !enoughContext}>{loading ? <LoaderCircle className="size-4 animate-spin" /> : <BrainCircuit className="size-4" />}{loading ? "Finding the signal" : "Reveal the signal"}<ArrowRight className="size-4" /></Button></div></div>
+      <div className="voice-stage">
+        <div className={dictation.recording ? "record-aura active" : "record-aura"}>
+          <button className="record-button" aria-label={dictation.recording ? "Stop recording" : "Start recording"} onClick={dictation.toggle}>{dictation.recording ? <Square className="size-7 fill-current" /> : <Mic className="size-8" />}</button>
+        </div>
+        <div className="record-copy"><b>{dictation.recording ? "Listening deeply" : dictation.transcribing ? "Adding your words" : "Tap to speak"}</b><span>{dictation.recording ? formatTime(dictation.seconds) : "Your voice stays private and focused"}</span></div>
+        <Waveform active={dictation.recording} />
+      </div>
+      <div className="transcript-side">
+        <div className="panel-label"><span>Reflection transcript</span><span>{wordCount} words</span></div>
+        <textarea value={text} onChange={(event) => { setText(event.target.value); setGuidance(""); }} placeholder="What feels tangled right now, and what do you want to do next week?" />
+        <div className="preset-row"><button onClick={() => { setText(example); setGuidance(""); }}><span>⚡</span>Try an example</button></div>
+        <div className="analyze-row" aria-live="polite">
+          {error && <p className="error-text">{error}</p>}
+          <Button size="lg" onClick={runAnalysis} disabled={loading || dictation.recording || !text.trim()}>{loading ? <LoaderCircle className="size-4 animate-spin" /> : <BrainCircuit className="size-4" />}{loading ? "Finding the signal" : "Reveal the signal"}<ArrowRight className="size-4" /></Button>
+        </div>
+      </div>
     </div>
-    {guidance ? <ListeningCard message={guidance} onPreset={(preset) => { setText(preset); setGuidance(""); }} /> : result ? <div className="results-wrap"><DailyAffirmation result={result} onPin={pinAffirmation} onPlay={playAffirmation} onRefresh={refreshAffirmation} audioState={audioState} refreshing={affirmationLoading} notice={affirmationNotice} /><div className="results-header"><div><span className="eyebrow">YOUR CLARITY MAP</span><h2>The signal beneath the noise</h2></div><SourcePill source={result.source} /></div><div className="insight-grid">
-      <article className="insight-card compact-insight reframe-card"><div className="card-top"><span className="icon-box violet"><BrainCircuit /></span><span className="mini-label">GROUNDED PERSPECTIVE</span></div><span className="distortion">Pattern · {result.detected_distortion}</span><blockquote>“{result.reframe}”</blockquote><Button variant="ghost" size="sm" onClick={() => navigator.clipboard.writeText(result.reframe)}><Copy className="size-3.5" />Copy insight</Button></article>
-      <article className="insight-card compact-insight"><div className="card-top"><span className="icon-box cyan"><Eye /></span><span className="mini-label">BLIND-SPOT MIRROR</span></div><h3>{result.blind_spot_insight}</h3><button className="drawer-trigger" onClick={() => setDrawer(!drawer)}>Interrogate this pattern <ChevronDown className={drawer ? "size-4 rotate-180" : "size-4"} /></button>{drawer && <div className="socratic"><button onClick={() => setQuestion("Your default protects you from short-term discomfort, but charges interest through exhaustion.")}>Why is this habit my default?</button><button onClick={() => setQuestion("An objective mentor would define done, ask for evidence, and expose the work earlier.")}>What would an objective mentor do?</button>{question && <p>{question}</p>}</div>}</article>
-      <ActionsCard items={actionItems} completed={completed} onToggle={toggleAction} onAdd={addAction} onRemove={removeAction} onRename={renameAction} />
-      <article className="insight-card wellness-card"><div className="card-top"><span className="icon-box rose"><Gauge /></span><span className="mini-label">WELLNESS PULSE</span></div><div className="stress-row"><div><span>Stress load</span><strong>{result.stress_level}<small>/10</small></strong></div><div className="meter"><i style={{ width: `${result.stress_level * 10}%` }} /></div></div><div className="tag-row">{result.emotional_tags.map((tag) => <span key={tag}>{tag}</span>)}</div><div className="grounding"><Waves className="size-4" /><div><b>2-minute reset</b><p>{result.grounding_micro_habit}</p></div></div></article>
-      <div className="safety-note"><ShieldCheck className="size-4" /><p><b>Responsible AI:</b> Non-clinical tool for cognitive productivity. Ephemeral local processing — no personal voice recordings stored on external servers.</p></div>
-    </div></div> : <div className="empty-insights"><BrainCircuit className="size-5" /><span>Your clarity map will unfold here after your first reflection.</span></div>}
+
+    {guidance
+      ? <article className="listening-card view-enter"><span className="icon-box mint"><Waves className="size-4" /></span><div><span className="eyebrow">SENSUS IS LISTENING...</span><h2>A little more context will reveal the pattern.</h2><p>{guidance}</p><div className="preset-row"><button onClick={() => { setText(example); setGuidance(""); }}><span>⚡</span>Try an example</button></div></div></article>
+      : result ? <div className="results-wrap">
+        <div className="results-header"><div><span className="eyebrow">YOUR CLARITY MAP</span><h2>The signal beneath the noise</h2></div><SourcePill source={result.source} /></div>
+        <div className="insight-grid">
+          <article className="insight-card compact-insight reframe-card"><div className="card-top"><span className="icon-box violet"><BrainCircuit /></span><span className="mini-label">GROUNDED PERSPECTIVE</span></div><span className="distortion">Pattern · {result.detected_distortion}</span><blockquote>“{result.reframe}”</blockquote><Button variant="ghost" size="sm" onClick={() => navigator.clipboard.writeText(result.reframe)}><Copy className="size-3.5" />Copy insight</Button></article>
+          <article className="insight-card compact-insight"><div className="card-top"><span className="icon-box cyan"><Gauge /></span><span className="mini-label">BLIND-SPOT MIRROR</span></div><h3>{result.blind_spot_insight}</h3></article>
+          <ActionsCard items={actionItems} completed={completed}
+            onToggle={(label) => setCompleted(completed.includes(label) ? completed.filter((item) => item !== label) : [...completed, label])}
+            onAdd={(label) => { if (!actionEdits.custom.includes(label)) setActionEdits({ ...actionEdits, custom: [...actionEdits.custom, label] }); }}
+            onRemove={(key, custom) => custom ? setActionEdits({ ...actionEdits, custom: actionEdits.custom.filter((item) => `custom:${item}` !== key) }) : setActionEdits({ ...actionEdits, removed: [...actionEdits.removed, key] })}
+            onRename={(key, label, custom) => custom ? setActionEdits({ ...actionEdits, custom: actionEdits.custom.map((item) => `custom:${item}` === key ? label : item) }) : setActionEdits({ ...actionEdits, renamed: { ...actionEdits.renamed, [key]: label } })} />
+          <article className="insight-card wellness-card"><div className="card-top"><span className="icon-box rose"><Gauge /></span><span className="mini-label">WELLNESS PULSE</span></div>
+            <div className="stress-row"><div><span>Capacity today</span><strong className="band-value">{result.stress_band}</strong></div><div className="meter"><i style={{ width: BAND_COPY[result.stress_band].width }} /></div></div>
+            <p className="band-hint">{BAND_COPY[result.stress_band].hint}</p>
+            <div className="tag-row">{result.emotional_tags.map((tag) => <span key={tag}>{tag}</span>)}</div>
+            <div className="grounding"><Waves className="size-4" /><div><b>2-minute reset</b><p>{result.grounding_micro_habit}</p></div></div>
+          </article>
+        </div>
+        <div className="schedule-cta"><div><b>Turn this into next week.</b><span>Sensus links what you said to the goals you already track, then books realistic blocks.</span></div><Button size="lg" onClick={scheduleWeek} disabled={scheduling}>{scheduling ? <LoaderCircle className="size-4 animate-spin" /> : <CalendarCheck className="size-4" />}{scheduling ? "Scheduling your week" : "Schedule this into my week"}</Button></div>
+      </div>
+      : <div className="empty-insights"><BrainCircuit className="size-5" /><span>Your clarity map will unfold here after your first reflection.</span></div>}
+
+    <ReflectionLog reflections={reflections} setReflections={setReflections} />
   </section>;
 }
 
-function AgendaView({ goals, setGoals }: { goals: GoalItem[]; setGoals: (value: GoalItem[]) => void }) {
+function ReflectionLog({ reflections, setReflections }: { reflections: Reflection[]; setReflections: (v: Reflection[]) => void }) {
+  const generate = useServerFn(generateFollowUpPrompts);
+  const [search, setSearch] = useState("");
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const query = search.trim().toLowerCase();
+  const filtered = reflections.filter((reflection) => !query || [reflection.text, reflection.guidanceMessage, reflection.result?.reframe, reflection.result?.detected_distortion, ...(reflection.result?.action_items ?? []), ...(reflection.followUpPrompts ?? [])].filter(Boolean).join(" ").toLowerCase().includes(query));
+  const trend = useMemo(() => {
+    const bands = reflections.filter((item) => item.result).slice(0, 5).reverse().map((item) => item.result!.stress_band);
+    return bands.length >= 2 ? `${bands[0]} → ${bands[bands.length - 1]} across your last ${bands.length} reflections` : null;
+  }, [reflections]);
+  const createPrompts = async (reflection: Reflection) => {
+    if (reflection.text.trim().length < 60) { setError("This entry is too short for meaningful follow-up questions."); return; }
+    setLoadingId(reflection.id); setError("");
+    try {
+      const response = await generate({ data: { reflection: reflection.text.trim() } });
+      if (!response.ok) { setError(response.error); return; }
+      setReflections(reflections.map((item) => item.id === reflection.id ? { ...item, followUpPrompts: response.prompts, gentleFocus: response.gentleFocus } : item));
+    } catch { setError("Sensus could not shape follow-up prompts right now.") }
+    finally { setLoadingId(null); }
+  };
+  return <section className="history-view reflect-log">
+    <div className="history-toolbar">
+      <label className="history-search"><Search className="size-4" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search past reflections, patterns, or actions" aria-label="Search reflections" /></label>
+      <div className="date-filters">{search && <Button variant="ghost" size="sm" onClick={() => setSearch("")}><X className="size-3.5" />Clear</Button>}{reflections.length > 0 && <ConfirmRemove label="all reflection history" confirmLabel="Clear all history?" onConfirm={() => setReflections([])} withText />}</div>
+    </div>
+    <div className="history-summary"><span>{filtered.length} {filtered.length === 1 ? "reflection" : "reflections"}</span>{trend && <span className="trend-line"><Gauge className="size-3.5" />{trend}</span>}</div>
+    {error && <p className="history-error" role="alert">{error}</p>}
+    {filtered.length ? <div className="history-entries">{filtered.map((reflection) => <ReflectionCard key={reflection.id} reflection={reflection} loading={loadingId === reflection.id} onGenerate={() => createPrompts(reflection)} onDelete={() => setReflections(reflections.filter((item) => item.id !== reflection.id))} />)}</div>
+      : <div className="history-empty"><BookOpen className="size-5" /><b>{reflections.length ? "No reflections match this search." : "No recorded reflections yet."}</b><span>{reflections.length ? "Try a different phrase." : "Speak or type above to generate your first clarity map."}</span></div>}
+  </section>;
+}
+
+function ReflectionCard({ reflection, loading, onGenerate, onDelete }: { reflection: Reflection; loading: boolean; onGenerate: () => void; onDelete: () => void }) {
+  const [open, setOpen] = useState(false);
+  const result = reflection.result;
+  return <article className={reflection.guidanceMessage ? "history-card guidance-entry" : "history-card"}>
+    <div className="history-card-row">
+      <button className="history-card-head" onClick={() => setOpen(!open)} aria-expanded={open}><div><span className="history-kind">{reflection.guidanceMessage ? "Guidance" : result ? `${result.detected_distortion} · ${result.stress_band}` : "Journal entry"}</span><h3>{reflection.text}</h3><time>{new Date(reflection.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</time></div><ChevronDown className={open ? "size-4 rotate-180" : "size-4"} /></button>
+      <ConfirmRemove label="this reflection" onConfirm={onDelete} />
+    </div>
+    {open && <div className="history-detail view-enter" aria-live="polite">
+      {reflection.guidanceMessage && <div className="history-guidance"><Waves className="size-4" /><p>{reflection.guidanceMessage}</p></div>}
+      {result && <>
+        <div className="history-insight"><span>Grounded perspective</span><blockquote>“{result.reframe}”</blockquote></div>
+        <div className="history-insight"><span>Blind-spot mirror</span><p>{result.blind_spot_insight}</p></div>
+        <div className="history-actions"><span>Action items</span>{result.action_items.map((action) => <p key={action}><Check className="size-3.5" />{action}</p>)}</div>
+      </>}
+      {reflection.gentleFocus && <p className="gentle-focus"><Sparkles className="size-3.5" />{reflection.gentleFocus}</p>}
+      {reflection.followUpPrompts?.length
+        ? <div className="prompt-list"><span>Follow-up journal prompts</span>{reflection.followUpPrompts.map((prompt, index) => <div key={prompt}><b>{String(index + 1).padStart(2, "0")}</b><p>{prompt}</p></div>)}</div>
+        : !reflection.guidanceMessage && <Button variant="glass" onClick={onGenerate} disabled={loading}>{loading ? <LoaderCircle className="size-4 animate-spin" /> : <Sparkles className="size-4" />}{loading ? "Shaping prompts" : "Generate follow-up prompts"}</Button>}
+    </div>}
+  </article>;
+}
+
+function WeekView({ goals, setGoals, plan, setPlan, onSpeak }: { goals: GoalItem[]; setGoals: (v: GoalItem[]) => void; plan: WeekPlan | null; setPlan: (v: WeekPlan | null) => void; onSpeak: () => void }) {
   const planWeek = useServerFn(planWeekFromReflection);
-  const recorder = useRef<Awaited<ReturnType<typeof recordWav>> | null>(null);
-  const [plan, setPlan] = useStoredState<WeekPlan | null>("sensus-week-plan", null);
   const [brief, setBrief] = useStoredState("sensus-week-brief", "");
   const [planning, setPlanning] = useState(false);
-  const [recording, setRecording] = useState(false);
-  const [transcribing, setTranscribing] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const toggleRecording = async () => {
-    setError("");
-    if (!recording) { try { recorder.current = await recordWav(); setRecording(true); } catch { setError("Microphone access is needed to plan by voice."); } return; }
-    setRecording(false);
-    try { const file = await recorder.current?.stop(); recorder.current = null; if (!file) return; setTranscribing(true); const form = new FormData(); form.append("audio", file); const response = await fetch("/api/transcribe", { method: "POST", body: form }); const body = await response.json() as { text?: string; error?: string }; if (!response.ok) throw new Error(body.error ?? "Transcription failed."); setBrief([brief.trim(), body.text?.trim()].filter(Boolean).join(" ")); } catch (caught) { setError(caught instanceof Error ? caught.message : "Transcription failed."); } finally { setTranscribing(false); }
-  };
+  const [composing, setComposing] = useState(false);
+  const dictation = useDictation((spoken) => setBrief([brief.trim(), spoken].filter(Boolean).join(" ")), setError);
   const buildWeek = async () => {
     if (planning) return;
     if (brief.trim().length < 40) { setError("Share a little more about what you want to do next week."); return; }
@@ -211,246 +315,122 @@ function AgendaView({ goals, setGoals }: { goals: GoalItem[]; setGoals: (value: 
       setPlan(response.plan);
       const fresh = response.plan.goals.filter((item) => !item.existingGoalId && !goals.some((goal) => goal.title.trim().toLowerCase() === item.title.trim().toLowerCase()));
       if (fresh.length) setGoals([...fresh.map((item) => ({ id: crypto.randomUUID(), title: item.title, category: item.category, date: "This week", status: "In momentum" as const })), ...goals]);
-      setNotice(fresh.length ? `${fresh.length} new intention${fresh.length > 1 ? "s" : ""} added to your programme.` : "Your agenda is linked to the intentions you already track.");
-    } catch { setError("Week planning is unavailable right now. Your notes are still here."); } finally { setPlanning(false); }
+      setNotice(fresh.length ? `${fresh.length} new goal${fresh.length > 1 ? "s" : ""} added to your programme.` : "Your agenda is linked to the goals you already track.");
+      setComposing(false);
+    } catch { setError("Week planning is unavailable right now. Your notes are still here."); }
+    finally { setPlanning(false); }
   };
-  return <section className="view-enter agenda-view"><div className="section-heading agenda-hero"><div><span className="eyebrow"><CalendarDays className="size-3.5" /> WEEKLY AGENDA</span><h1>See your week.<br/><span>Move with intention.</span></h1></div><p>Describe what matters next week. Sensus connects your goals and builds a realistic visual schedule.</p></div>
-    <div className="agenda-composer"><textarea value={brief} onChange={(event) => setBrief(event.target.value)} placeholder="Next week I want to finish… I have time on… I also need space for…" aria-label="What do you want to do next week?" /><Button variant="icon" size="icon" className={recording ? "agenda-mic recording" : "agenda-mic"} aria-label={recording ? "Stop planning by voice" : "Plan by voice"} onClick={toggleRecording}>{recording ? <Square className="size-4 fill-current" /> : transcribing ? <LoaderCircle className="size-4 animate-spin" /> : <Mic className="size-4" />}</Button><div className="agenda-compose-actions"><span>{brief.length ? `${brief.length} characters` : "Type or speak naturally"}</span><Button onClick={buildWeek} disabled={planning || transcribing}>{planning ? <LoaderCircle className="size-4 animate-spin" /> : <CalendarCheck className="size-4" />}{planning ? "Building your week" : plan ? "Replan my week" : "Build my week"}</Button></div></div>
-    <WeekAgendaCard plan={plan} planning={planning} error={error} notice={notice} onPlan={buildWeek} onClear={() => { setPlan(null); setNotice(""); setError(""); }} standalone />
+  const patchBlock = (id: string, patch: Partial<WeekPlan["blocks"][number]>) => { if (plan) setPlan({ ...plan, blocks: plan.blocks.map((block) => block.id === id ? { ...block, ...patch } : block) }); };
+  const removeBlock = (id: string) => { if (plan) setPlan({ ...plan, blocks: plan.blocks.filter((block) => block.id !== id) }); };
+  const done = plan?.blocks.filter((block) => block.done).length ?? 0;
+
+  return <section className="view-enter agenda-view">
+    <div className="section-heading agenda-hero"><div><span className="eyebrow"><CalendarDays className="size-3.5" /> MY WEEK</span><h1>See your week.<br /><span>Move with intention.</span></h1></div><p>Sensus reads what matters next week, connects it to your goals, and books realistic blocks you can edit.</p></div>
+
+    {!plan && !composing
+      ? <div className="week-cold-open"><CalendarDays className="size-6" /><b>Your week is open.</b><span>Tell Sensus what matters next week and it will build the schedule.</span><div className="cold-open-actions"><Button size="lg" onClick={onSpeak}><Mic className="size-4" />Speak about your week</Button><Button variant="glass" size="lg" onClick={() => setComposing(true)}><Pencil className="size-4" />Type it instead</Button></div></div>
+      : <div className="agenda-composer">
+        <textarea value={brief} onChange={(event) => setBrief(event.target.value)} placeholder="Next week I want to finish… I have time on… I also need space for…" aria-label="What do you want to do next week?" />
+        <Button variant="icon" size="icon" className={dictation.recording ? "agenda-mic recording" : "agenda-mic"} aria-label={dictation.recording ? "Stop planning by voice" : "Plan by voice"} onClick={dictation.toggle}>{dictation.recording ? <Square className="size-4 fill-current" /> : dictation.transcribing ? <LoaderCircle className="size-4 animate-spin" /> : <Mic className="size-4" />}</Button>
+        <div className="agenda-compose-actions"><span>{brief.length ? `${brief.length} characters` : "Type or speak naturally"}</span><Button onClick={buildWeek} disabled={planning || dictation.transcribing}>{planning ? <LoaderCircle className="size-4 animate-spin" /> : <CalendarCheck className="size-4" />}{planning ? "Building your week" : plan ? "Replan my week" : "Build my week"}</Button></div>
+      </div>}
+
+    <div aria-live="polite">{error && <p className="error-text">{error}</p>}{notice && <p className="agenda-notice" role="status"><Check className="size-3.5" />{notice}</p>}</div>
+
+    {plan && <article className="agenda-card agenda-standalone">
+      <div className="agenda-head">
+        <div><span className="mini-label"><CalendarDays className="size-3.5" /> NEXT WEEK AGENDA</span><h2>{done} of {plan.blocks.length} blocks done</h2><p>{plan.summary}</p></div>
+        <div className="agenda-head-actions"><Button variant="glass" size="sm" onClick={() => setComposing(true)}><Pencil className="size-3.5" />Edit brief</Button><ConfirmRemove label="this agenda" confirmLabel="Clear agenda?" onConfirm={() => { setPlan(null); setNotice(""); }} withText /></div>
+      </div>
+      <div className="plan-meta"><span><Sparkles className="size-3" />{plan.meta.model}</span><span>{plan.meta.toolCalls} agent tool calls</span><span>{plan.meta.goalsLinked} goals linked · {plan.meta.goalsCreated} created</span><span>{plan.meta.blocksScheduled} blocks scheduled</span><span>{(plan.meta.latencyMs / 1000).toFixed(1)}s</span></div>
+      {plan.goals.length > 0 && <div className="agenda-goals">{plan.goals.map((goal) => <span key={`${goal.title}-${goal.category}`}><Goal className="size-3" />{goal.title}<i>{goal.category}</i></span>)}</div>}
+      <div className="agenda-week">{groupByDay(plan.blocks).map((day) => <div className="agenda-day" key={day.label}>
+        <span className="agenda-day-label">{day.label}</span>
+        <div className="agenda-blocks">{day.blocks.map((block) => <AgendaBlockCard key={block.id} block={block} onPatch={(patch) => patchBlock(block.id, patch)} onRemove={() => removeBlock(block.id)} />)}</div>
+      </div>)}</div>
+    </article>}
   </section>;
 }
 
-function WeekAgendaCard({ plan, planning, error, notice, onPlan, onClear, standalone = false }: { plan: WeekPlan | null; planning: boolean; error: string; notice: string; onPlan: () => void; onClear: () => void; standalone?: boolean }) {
-  const days = (plan?.blocks ?? []).reduce<{ label: string; blocks: WeekPlan["blocks"] }[]>((acc, block) => {
+function groupByDay(blocks: WeekPlan["blocks"]) {
+  return blocks.reduce<{ label: string; blocks: WeekPlan["blocks"] }[]>((acc, block) => {
     const current = acc.find((group) => group.label === block.dayLabel);
     if (current) current.blocks.push(block); else acc.push({ label: block.dayLabel, blocks: [block] });
     return acc;
   }, []);
-  const emptyDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-  return <article className={standalone ? "agenda-card agenda-standalone" : "agenda-card"}>
-    <div className="agenda-head">
-      <div><span className="mini-label"><CalendarDays className="size-3.5" /> NEXT WEEK AGENDA</span><h2>Your reflection, scheduled.</h2><p>Sensus reads what you want to do next week, adds it to your programme, then places realistic blocks on your agenda.</p></div>
-      <div className="agenda-head-actions">
-        {!standalone && <Button onClick={onPlan} disabled={planning}>{planning ? <LoaderCircle className="size-4 animate-spin" /> : <CalendarCheck className="size-4" />}{planning ? "Building your week" : plan ? "Replan my week" : "Plan my week"}</Button>}
-        {plan && <Button variant="ghost" size="sm" onClick={onClear}><Trash2 className="size-3.5" />Clear agenda</Button>}
+}
+
+function AgendaBlockCard({ block, onPatch, onRemove }: { block: WeekPlan["blocks"][number]; onPatch: (patch: { title?: string; done?: boolean }) => void; onRemove: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(block.title);
+  return <div className={block.done ? "agenda-block done" : "agenda-block"}>
+    <span className="agenda-time">{block.timeLabel}<i>{block.durationMinutes} min</i></span>
+    <div className="agenda-body">
+      {editing
+        ? <div className="block-edit"><input value={title} onChange={(event) => setTitle(event.target.value)} aria-label="Edit block title" autoFocus /><Button variant="icon" size="icon" aria-label="Save block" onClick={() => { if (title.trim()) onPatch({ title: title.trim() }); setEditing(false); }}><Check className="size-3.5" /></Button><Button variant="icon" size="icon" aria-label="Cancel block edit" onClick={() => { setTitle(block.title); setEditing(false); }}><X className="size-3.5" /></Button></div>
+        : <b>{block.title}</b>}
+      <span className="agenda-goal">{block.goalTitle}</span>
+      <p>{block.why}</p>
+      <div className="block-tools">
+        <button className={block.done ? "check-box checked" : "check-box"} aria-label={`Mark ${block.title} done`} aria-pressed={!!block.done} onClick={() => onPatch({ done: !block.done })}>{block.done && <Check className="size-3" />}</button>
+        <CalendarActions title={block.title} compact when={block.startsAt} />
+        <Button variant="icon" size="icon" aria-label={`Edit ${block.title}`} title="Edit" onClick={() => setEditing(true)}><Pencil className="size-3.5" /></Button>
+        <ConfirmRemove label={block.title} onConfirm={onRemove} />
       </div>
     </div>
-    {error && <p className="error-text">{error}</p>}
-    {notice && <p className="agenda-notice" role="status"><Check className="size-3.5" />{notice}</p>}
-    {plan ? <>
-      <p className="agenda-summary">{plan.summary}</p>
-      {plan.goals.length > 0 && <div className="agenda-goals">{plan.goals.map((goal) => <span key={`${goal.title}-${goal.category}`}><Goal className="size-3" />{goal.title}<i>{goal.category}</i></span>)}</div>}
-      <div className="agenda-week">{days.map((day) => <div className="agenda-day" key={day.label}>
-        <span className="agenda-day-label">{day.label}</span>
-        <div className="agenda-blocks">{day.blocks.map((block) => <div className="agenda-block" key={block.id}>
-          <span className="agenda-time">{block.timeLabel}<i>{block.durationMinutes} min</i></span>
-          <div className="agenda-body"><b>{block.title}</b><span className="agenda-goal">{block.goalTitle}</span><p>{block.why}</p><CalendarActions title={block.title} compact when={block.startsAt} /></div>
-        </div>)}</div>
-      </div>)}</div>
-    </> : <div className="agenda-week agenda-week-empty">{emptyDays.map((day) => <div className="agenda-day" key={day}><span className="agenda-day-label">{day}</span><div className="agenda-empty-slot">Open space</div></div>)}</div>}
-  </article>;
+  </div>;
 }
 
-function HistoryView({ reflections, setReflections }: { reflections: Reflection[]; setReflections: (value: Reflection[]) => void }) {
-  const generate = useServerFn(generateFollowUpPrompts);
-  const reflectionRecorder = useRef<Awaited<ReturnType<typeof recordWav>> | null>(null);
-  const [search, setSearch] = useState("");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
-  const [draft, setDraft] = useState("");
-  const [loadingId, setLoadingId] = useState<string | null>(null);
-  const [error, setError] = useState("");
-  const [dictating, setDictating] = useState(false);
-  const [transcribing, setTranscribing] = useState(false);
-  const normalizedSearch = search.trim().toLowerCase();
-  const filtered = reflections.filter((reflection) => {
-    const day = reflection.createdAt.slice(0, 10);
-    if (fromDate && day < fromDate) return false;
-    if (toDate && day > toDate) return false;
-    if (!normalizedSearch) return true;
-    const searchable = [reflection.text, reflection.guidanceMessage, reflection.result?.detected_distortion, reflection.result?.reframe, reflection.result?.blind_spot_insight, ...(reflection.result?.action_items ?? []), ...(reflection.followUpPrompts ?? [])].filter(Boolean).join(" ").toLowerCase();
-    return searchable.includes(normalizedSearch);
-  });
-  const createPrompts = async (reflectionText: string, reflectionId?: string) => {
-    if (reflectionText.trim().length < 60) { setError("Add at least a couple of sentences so Sensus can shape meaningful follow-up questions."); return; }
-    const targetId = reflectionId ?? crypto.randomUUID();
-    setLoadingId(targetId); setError("");
-    try {
-      const response = await generate({ data: { reflection: reflectionText.trim() } });
-      if (!response.ok) { setError(response.error); return; }
-      if (reflectionId) {
-        setReflections(reflections.map((item) => item.id === reflectionId ? { ...item, followUpPrompts: response.prompts, gentleFocus: response.gentleFocus } : item));
-      } else {
-        setReflections([{ id: targetId, text: reflectionText.trim(), followUpPrompts: response.prompts, gentleFocus: response.gentleFocus, createdAt: new Date().toISOString() }, ...reflections].slice(0, 50));
-        setDraft("");
-      }
-    } catch { setError("Sensus could not shape follow-up prompts right now. Your reflection is still here."); }
-    finally { setLoadingId(null); }
-  };
-  const toggleDictation = async () => {
-    setError("");
-    if (!dictating) {
-      try {
-        reflectionRecorder.current = await recordWav();
-        setDictating(true);
-      } catch {
-        setError("Microphone access is needed to dictate a reflection.");
-      }
-      return;
-    }
-    setDictating(false);
-    try {
-      const file = await reflectionRecorder.current?.stop();
-      reflectionRecorder.current = null;
-      if (!file) return;
-      setTranscribing(true);
-      const form = new FormData();
-      form.append("audio", file);
-      const response = await fetch("/api/transcribe", { method: "POST", body: form });
-      const body = await response.json() as { text?: string; error?: string };
-      if (!response.ok) throw new Error(body.error ?? "Transcription failed.");
-      const spokenText = body.text?.trim();
-      if (spokenText) setDraft((current) => `${current.trim()}${current.trim() ? " " : ""}${spokenText}`);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Transcription failed.");
-    } finally {
-      setTranscribing(false);
-    }
-  };
-  const grouped = filtered.reduce<Record<string, Reflection[]>>((groups, reflection) => {
-    const day = reflection.createdAt.slice(0, 10);
-    groups[day] = [...(groups[day] ?? []), reflection];
-    return groups;
-  }, {});
-  return <section className="view-enter history-view">
-    <div className="vision-hero history-hero"><div><span className="eyebrow"><BookOpen className="size-3.5" /> REFLECTION HISTORY</span><h1>Notice what changes<br/><span>when you look back.</span></h1></div><p>Search the thoughts, patterns, guidance, and actions that have shaped your recent days.</p></div>
-    <article className="follow-up-composer"><div className="follow-up-copy"><span className="icon-box mint"><Sparkles className="size-4" /></span><div><span className="eyebrow">CONTINUE THE REFLECTION</span><h2>Let one insight open the next.</h2><p>Paste or write a completed reflection. Sensus will shape four personalized questions for your next journaling session.</p></div></div><div className="follow-up-entry"><div className="reflection-dictation"><textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Today I noticed…" aria-label="Completed reflection"/><Button className={dictating ? "reflection-mic recording" : "reflection-mic"} variant="icon" size="icon" aria-label={dictating ? "Stop dictation" : transcribing ? "Transcribing reflection" : "Dictate reflection"} aria-pressed={dictating} disabled={transcribing} onClick={toggleDictation}>{transcribing ? <LoaderCircle className="size-4 animate-spin" /> : dictating ? <Square className="size-3.5 fill-current" /> : <Mic className="size-4" />}</Button></div><div><span>{dictating ? "Listening… tap the mic to finish" : transcribing ? "Adding your words…" : draft.trim() ? `${draft.trim().split(/\s+/).length} words` : "A couple of sentences is enough"}</span><Button onClick={() => createPrompts(draft)} disabled={draft.trim().length < 60 || loadingId !== null || dictating || transcribing}>{loadingId && !reflections.some((item) => item.id === loadingId) ? <LoaderCircle className="size-4 animate-spin" /> : <Sparkles className="size-4" />}Generate follow-up prompts</Button></div></div></article>
-    {error && <p className="history-error" role="alert">{error}</p>}
-    <div className="history-toolbar"><label className="history-search"><Search className="size-4"/><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search reflections, patterns, or actions" aria-label="Search reflection history"/></label><div className="date-filters"><label><span>From</span><input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)}/></label><label><span>To</span><input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)}/></label>{(search || fromDate || toDate) && <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setFromDate(""); setToDate(""); }}><X className="size-3.5"/>Clear</Button>}{reflections.length > 0 && <ConfirmRemove label="all reflection history" confirmLabel="Clear all history?" onConfirm={() => setReflections([])} withText />}</div></div>
-    <div className="history-summary"><span>{filtered.length} {filtered.length === 1 ? "reflection" : "reflections"}</span><span>{Object.keys(grouped).length} {Object.keys(grouped).length === 1 ? "day" : "days"}</span></div>
-    {filtered.length ? <div className="history-timeline">{Object.entries(grouped).map(([day, entries]) => <section className="history-day" key={day}><div className="history-date"><CalendarDays className="size-4"/><time dateTime={day}>{new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</time></div><div className="history-entries">{entries.map((reflection) => <ReflectionHistoryCard key={reflection.id} reflection={reflection} loading={loadingId === reflection.id} onGenerate={() => createPrompts(reflection.text, reflection.id)} onDelete={() => setReflections(reflections.filter((item) => item.id !== reflection.id))}/>)}</div></section>)}</div> : <div className="history-empty"><BookOpen className="size-5"/><b>{reflections.length ? "No reflections match this view." : "No recorded reflections yet."}</b><span>{reflections.length ? "Try a different phrase or widen the date range." : "Speak or type above to generate your first clarity map."}</span>{reflections.length ? <Button variant="glass" size="sm" onClick={() => { setSearch(""); setFromDate(""); setToDate(""); }}><X className="size-3.5"/>Clear filters</Button> : null}</div>}
-  </section>;
-}
-
-function ReflectionHistoryCard({ reflection, loading, onGenerate, onDelete }: { reflection: Reflection; loading: boolean; onGenerate: () => void; onDelete: () => void }) {
-  const [open, setOpen] = useState(false);
-  const result = reflection.result;
-  return <article className={reflection.guidanceMessage ? "history-card guidance-entry" : "history-card"}><div className="history-card-row"><button className="history-card-head" onClick={() => setOpen(!open)} aria-expanded={open}><div><span className="history-kind">{reflection.guidanceMessage ? "Guidance" : result ? result.detected_distortion : "Journal entry"}</span><h3>{reflection.text}</h3><time>{new Date(reflection.createdAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}</time></div><ChevronDown className={open ? "size-4 rotate-180" : "size-4"}/></button><ConfirmRemove label="this reflection" onConfirm={onDelete}/></div>{open && <div className="history-detail view-enter">{reflection.guidanceMessage && <div className="history-guidance"><Waves className="size-4"/><p>{reflection.guidanceMessage}</p></div>}{result && <><div className="history-insight"><span>Grounded perspective</span><blockquote>“{result.reframe}”</blockquote></div><div className="history-insight"><span>Blind-spot mirror</span><p>{result.blind_spot_insight}</p></div><div className="history-actions"><span>Action items</span>{result.action_items.map((action) => <p key={action}><Check className="size-3.5"/>{action}</p>)}</div></>}{reflection.gentleFocus && <p className="gentle-focus"><Sparkles className="size-3.5"/>{reflection.gentleFocus}</p>}{reflection.followUpPrompts?.length ? <div className="prompt-list"><span>Follow-up journal prompts</span>{reflection.followUpPrompts.map((prompt, index) => <div key={prompt}><b>{String(index + 1).padStart(2, "0")}</b><p>{prompt}</p></div>)}</div> : !reflection.guidanceMessage && <Button variant="glass" onClick={onGenerate} disabled={loading}>{loading ? <LoaderCircle className="size-4 animate-spin"/> : <Sparkles className="size-4"/>}{loading ? "Shaping prompts" : "Generate follow-up prompts"}</Button>}</div>}</article>;
-}
-
-function ListeningCard({ message, onPreset }: { message: string; onPreset: (text: string) => void }) { return <article className="listening-card view-enter"><span className="icon-box mint"><Waves className="size-4" /></span><div><span className="eyebrow">SENSUS IS LISTENING...</span><h2>A little more context will reveal the pattern.</h2><p>{message}</p><div className="preset-row">{presets.map((preset) => <button key={preset.label} onClick={() => onPreset(preset.text)}><span>{preset.icon}</span>{preset.label}</button>)}</div></div></article>; }
-
-function DailyAffirmation({ result, onPin, onPlay, onRefresh, audioState, refreshing, notice }: { result: ClarityResult; onPin: () => void; onPlay: () => void; onRefresh: () => void; audioState: "idle" | "loading" | "playing"; refreshing: boolean; notice: string }) { return <article className="affirmation-capsule"><div className="affirmation-inner"><div className="affirmation-heading"><span className="affirmation-category"><Sparkles className="size-3.5" />{result.affirmation_category ?? "Inner Peace"}</span><SourcePill source={result.source} /></div><blockquote>“{result.positive_affirmation ?? "I meet this moment with clarity, self-trust, and the courage to shape what comes next."}”</blockquote><div className="manifestation-line"><span>Today’s frequency</span><p>{result.manifestation_prompt ?? "Picture tonight: your essential progress is made and your energy still feels like your own."}</p></div><div className="affirmation-actions"><Button variant="glass" onClick={onPin}><Pin className="size-4" />Pin to Vision Board</Button><Button variant="glass" onClick={onPlay} disabled={audioState !== "idle"}>{audioState === "loading" ? <LoaderCircle className="size-4 animate-spin" /> : <Volume2 className={audioState === "playing" ? "size-4 audio-pulse" : "size-4"} />}{audioState === "playing" ? "Playing" : audioState === "loading" ? "Preparing" : "Listen"}</Button><Button variant="ghost" onClick={onRefresh} disabled={refreshing}>{refreshing ? <LoaderCircle className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}New Mantra</Button></div>{notice && <p className="affirmation-notice" role="status">{notice}</p>}</div></article>; }
-
-function Waveform({ active }: { active: boolean }) { return <div className={active ? "waveform active" : "waveform"} aria-hidden="true">{Array.from({ length: 42 }, (_, i) => <i key={i} style={{ height: `${8 + ((i * 13) % 28)}px`, animationDelay: `${(i % 8) * -0.09}s` }} />)}</div>; }
-
-function VisionView({ goals, setGoals }: { goals: GoalItem[]; setGoals: (v: GoalItem[]) => void }) {
-  const buildRoadmap = useServerFn(generateExecutionRoadmap); const [title, setTitle] = useState(""); const [category, setCategory] = useState("Career"); const [loading, setLoading] = useState(false); const [featured, setFeatured] = useState<GoalItem | null>(goals.find((g) => g.roadmap ?? g.analysis) ?? null); const [planError, setPlanError] = useState("");
-  const [editingId, setEditingId] = useState<string | null>(null); const [editTitle, setEditTitle] = useState("");
+function ExecuteView({ goals, setGoals }: { goals: GoalItem[]; setGoals: (v: GoalItem[]) => void }) {
+  const buildRoadmap = useServerFn(generateExecutionRoadmap);
+  const [title, setTitle] = useState("");
+  const [category, setCategory] = useState("Career");
+  const [loading, setLoading] = useState(false);
+  const [featured, setFeatured] = useState<GoalItem | null>(goals.find((goal) => goal.roadmap) ?? null);
+  const [planError, setPlanError] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
   const createGoal = async () => {
-    const goalTitle = title.trim(); if (goalTitle.length < 3) { setPlanError("Name the goal in a few words so Sensus can plan it."); return; }
+    const goalTitle = title.trim();
+    if (goalTitle.length < 3) { setPlanError("Name the goal in a few words so Sensus can plan it."); return; }
     setLoading(true); setPlanError("");
     try {
       const response = await buildRoadmap({ data: { title: goalTitle, category, horizonWeeks: null } });
       if (!response.ok) { setPlanError(response.error); return; }
       const goal: GoalItem = { id: crypto.randomUUID(), title: goalTitle, category, date: `${response.roadmap.horizonWeeks} weeks`, status: "Refining", roadmap: response.roadmap };
       setGoals([goal, ...goals]); setFeatured(goal); setTitle("");
-    } catch (error) { console.error(error); setPlanError("Sensus could not reach the planner. Please try again."); }
+    } catch { setPlanError("Sensus could not reach the planner. Please try again."); }
     finally { setLoading(false); }
   };
-  return <section className="view-enter"><div className="vision-hero"><div><span className="eyebrow amber"><Goal className="size-3.5" /> EXECUTION ARCHITECTURE</span><h1>Deconstruct Ambition<br/><span>into daily execution.</span></h1></div><p>Dream vividly. Name the friction honestly. Install a plan that still works on ordinary days.</p></div>
-    <div className="goal-builder"><div className="goal-inputs"><div className="field-grow"><label htmlFor="goal-title">What do you want to make real?</label><input id="goal-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ship my AI SaaS MVP" /></div><div><label htmlFor="category">Category</label><select id="category" value={category} onChange={(e) => setCategory(e.target.value)}>{["Career","Fitness","Mindset","Creative"].map((item) => <option key={item}>{item}</option>)}</select></div><Button variant="primary" size="lg" onClick={createGoal} disabled={loading}>{loading ? <LoaderCircle className="size-4 animate-spin" /> : <Sparkles className="size-4" />}Generate Execution Roadmap</Button></div>
-      {planError && <p className="plan-error"><ShieldCheck className="size-3.5" />{planError}</p>}
-      {loading && !featured?.roadmap && <p className="plan-status">Stress-testing the ambition and sequencing milestones…</p>}
-      {(() => { const plan = featured?.roadmap ?? featured?.analysis; if (!featured || !plan) return null; return <>
-        <div className="woop-grid"><div><span>01 · THE DREAM</span><p>{plan.dream}</p></div><div><span>02 · INTERNAL FRICTION</span><p>{plan.internal_friction}</p></div><div><span>03 · IF—THEN BRIDGE</span><p>{plan.if_then_plan}</p><CalendarActions title={`Sensus: ${featured.title}`} /></div></div>
-        {featured.roadmap && <div className="roadmap-block view-enter"><div className="roadmap-head"><div><span className="eyebrow">EXECUTION ROADMAP</span><h3>{featured.roadmap.milestones.length} milestones · {featured.roadmap.horizonWeeks} weeks</h3></div><p>{featured.roadmap.weeklyCommitment}</p></div>
+  return <section className="view-enter">
+    <div className="vision-hero"><div><span className="eyebrow amber"><Goal className="size-3.5" /> EXECUTION ARCHITECTURE</span><h1>Deconstruct ambition<br /><span>into daily execution.</span></h1></div><p>Name the goal. Sensus stress-tests it, then sequences dated milestones you can put on a calendar.</p></div>
+    <div className="goal-builder">
+      <div className="goal-inputs"><div className="field-grow"><label htmlFor="goal-title">What do you want to make real?</label><input id="goal-title" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ship v1 to 10 design partners" /></div><div><label htmlFor="category">Category</label><select id="category" value={category} onChange={(event) => setCategory(event.target.value)}>{["Career", "Fitness", "Mindset", "Creative"].map((item) => <option key={item}>{item}</option>)}</select></div><Button variant="primary" size="lg" onClick={createGoal} disabled={loading}>{loading ? <LoaderCircle className="size-4 animate-spin" /> : <Sparkles className="size-4" />}Generate Execution Roadmap</Button></div>
+      <div aria-live="polite">{planError && <p className="plan-error"><ShieldCheck className="size-3.5" />{planError}</p>}{loading && <p className="plan-status">Stress-testing the ambition and sequencing milestones…</p>}</div>
+      {featured?.roadmap && <>
+        <div className="woop-grid"><div><span>01 · THE DREAM</span><p>{featured.roadmap.dream}</p></div><div><span>02 · INTERNAL FRICTION</span><p>{featured.roadmap.internal_friction}</p></div><div><span>03 · IF—THEN BRIDGE</span><p>{featured.roadmap.if_then_plan}</p><CalendarActions title={`Sensus: ${featured.title}`} /></div></div>
+        <div className="roadmap-block view-enter"><div className="roadmap-head"><div><span className="eyebrow">EXECUTION ROADMAP</span><h3>{featured.roadmap.milestones.length} milestones · {featured.roadmap.horizonWeeks} weeks</h3></div><p>{featured.roadmap.weeklyCommitment}</p></div>
           <ol className="milestone-list">{featured.roadmap.milestones.map((milestone, index) => <li key={milestone.title}><div className="milestone-index">{String(index + 1).padStart(2, "0")}</div><div className="milestone-body"><div className="milestone-top"><b>{milestone.title}</b><span className="milestone-due"><CalendarDays className="size-3.5" />{milestone.dueLabel}</span></div><p>{milestone.outcome}</p><p className="milestone-action"><ArrowRight className="size-3.5" />{milestone.firstAction}</p><CalendarActions title={`${featured.title}: ${milestone.title}`} when={milestone.dueDate} compact /></div></li>)}</ol>
-        </div>}
-      </>; })()}
+        </div>
+      </>}
     </div>
-    <div className="goal-roster"><div className="roster-head"><span className="eyebrow">YOUR GOALS</span><h3>{goals.length} {goals.length === 1 ? "goal" : "goals"} in play</h3></div>
-      {goals.length ? <ul>{goals.map((goal) => <li key={goal.id}>{editingId === goal.id ? <><input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} aria-label="Edit goal title" autoFocus /><Button variant="icon" size="icon" aria-label="Save goal" onClick={() => { if (editTitle.trim().length >= 3) setGoals(goals.map((item) => item.id === goal.id ? { ...item, title: editTitle.trim() } : item)); setEditingId(null); }}><Check className="size-3.5" /></Button><Button variant="icon" size="icon" aria-label="Cancel goal edit" onClick={() => setEditingId(null)}><X className="size-3.5" /></Button></> : <><div><b>{goal.title}</b><span>{goal.category} · {goal.status}</span></div><div className="roster-tools">{(goal.roadmap ?? goal.analysis) && <Button variant="ghost" size="sm" onClick={() => setFeatured(goal)}>View roadmap</Button>}<Button variant="icon" size="icon" aria-label={`Edit ${goal.title}`} title="Edit" onClick={() => { setEditingId(goal.id); setEditTitle(goal.title); }}><Pencil className="size-3.5" /></Button><ConfirmRemove label={goal.title} onConfirm={() => { setGoals(goals.filter((item) => item.id !== goal.id)); if (featured?.id === goal.id) setFeatured(null); }} /></div></>}</li>)}</ul>
+    <div className="goal-roster">
+      <div className="roster-head"><span className="eyebrow">YOUR GOALS</span><h3>{goals.length} {goals.length === 1 ? "goal" : "goals"} in play</h3></div>
+      {goals.length ? <ul>{goals.map((goal) => <li key={goal.id}>{editingId === goal.id
+        ? <><input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} aria-label="Edit goal title" autoFocus /><Button variant="icon" size="icon" aria-label="Save goal" onClick={() => { if (editTitle.trim().length >= 3) setGoals(goals.map((item) => item.id === goal.id ? { ...item, title: editTitle.trim() } : item)); setEditingId(null); }}><Check className="size-3.5" /></Button><Button variant="icon" size="icon" aria-label="Cancel goal edit" onClick={() => setEditingId(null)}><X className="size-3.5" /></Button></>
+        : <><div><b>{goal.title}</b><span>{goal.category} · {goal.status}</span></div><div className="roster-tools">{goal.roadmap && <Button variant="ghost" size="sm" onClick={() => setFeatured(goal)}>View roadmap</Button>}<Button variant="icon" size="icon" aria-label={`Edit ${goal.title}`} title="Edit" onClick={() => { setEditingId(goal.id); setEditTitle(goal.title); }}><Pencil className="size-3.5" /></Button><ConfirmRemove label={goal.title} onConfirm={() => { setGoals(goals.filter((item) => item.id !== goal.id)); if (featured?.id === goal.id) setFeatured(null); }} /></div></>}</li>)}</ul>
         : <div className="list-empty-card"><Target className="size-5" /><b>No goals yet.</b><span>Name one ambition above and Sensus will build the roadmap.</span><Button variant="glass" size="sm" onClick={() => document.getElementById("goal-title")?.focus()}><Plus className="size-3.5" />Add your first goal</Button></div>}
     </div>
   </section>;
 }
 
-function BoardView({ goals, setGoals, affirmations, setAffirmations }: { goals: GoalItem[]; setGoals: (v: GoalItem[]) => void; affirmations: AffirmationTile[]; setAffirmations: (v: AffirmationTile[]) => void }) {
-  const [boardTab, setBoardTab] = useState<"visions" | "affirmations">("visions");
-  const [affirmationDraft, setAffirmationDraft] = useState("");
-  const [addOpen, setAddOpen] = useState(false);
-  const [newGoal, setNewGoal] = useState("");
-  const [newCategory, setNewCategory] = useState("Mindset");
-  const [editTarget, setEditTarget] = useState<GoalItem | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editCategory, setEditCategory] = useState("Mindset");
-  const [generating, setGenerating] = useState<string | null>(null);
-  const [artNotice, setArtNotice] = useState("");
-  const [activeVision, setActiveVision] = useState<{ title: string; image: string } | null>(null);
-  const [ambience, setAmbience] = useState(false);
-  const audio = useRef<AmbientAudio | null>(null);
-  const affirmationIdeas = ["I create meaningful momentum with calm, focused action.", "I am ready to receive the opportunities I have prepared for.", "My self-trust grows every time I honor one clear promise.", "I move toward my vision with courage, patience, and joyful discipline."] as const;
-  useEffect(() => () => { void audio.current?.stop(); }, []);
-  const toggleAmbience = async () => {
-    if (ambience) { await audio.current?.stop(); audio.current = null; setAmbience(false); return; }
-    try { audio.current = await startAmbientAudio(); setAmbience(true); setArtNotice(""); } catch { setArtNotice("Ambient audio is unavailable in this browser."); }
-  };
-  const generateArt = async (goal: GoalItem) => {
-    if (generating) return;
-    setGenerating(goal.id); setArtNotice("");
-    try {
-      const response = await fetch("/api/generate-vision-art", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subject: goal.title, category: goal.category }) });
-      const body = await response.json().catch(() => null) as { url?: string; prompt?: string; error?: string } | null;
-      if (!response.ok || !body?.url) throw new Error(body?.error ?? "Vision Art could not be created.");
-      const imageUrl = body.url;
-      setGoals(goals.map((item) => item.id === goal.id ? { ...item, imageUrl, ...(body.prompt ? { imagePrompt: body.prompt } : {}) } : item));
-      setArtNotice("Your new Vision Art is ready.");
-    } catch (caught) { setArtNotice(caught instanceof Error ? caught.message : "Vision Art could not be created. Your curated image remains in place."); }
-    finally { setGenerating(null); }
-  };
-  const addVision = async (withArt: boolean) => {
-    if (newGoal.trim().length < 3) return;
-    const goal: GoalItem = { id: crypto.randomUUID(), title: newGoal.trim(), category: newCategory, date: "12 weeks", status: "In momentum" };
-    setGoals([goal, ...goals]); setNewGoal(""); setAddOpen(false);
-    if (withArt) {
-      setGenerating(goal.id); setArtNotice("Creating your Vision Art…");
-      try {
-        const response = await fetch("/api/generate-vision-art", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subject: goal.title, category: goal.category }) });
-        const body = await response.json().catch(() => null) as { url?: string; prompt?: string; error?: string } | null;
-        if (!response.ok || !body?.url) throw new Error(body?.error ?? "Vision Art could not be created.");
-        const imageUrl = body.url;
-        const base = goals.some((item) => item.id === goal.id) ? goals : [goal, ...goals];
-        setGoals(base.map((item) => item.id === goal.id ? { ...item, imageUrl, ...(body.prompt ? { imagePrompt: body.prompt } : {}) } : item)); setArtNotice("Your new vision and artwork are ready.");
-      } catch (caught) { setArtNotice(caught instanceof Error ? caught.message : "Your vision was saved with curated artwork."); }
-      finally { setGenerating(null); }
-    }
-  };
-  return <section className="view-enter"><div className="vision-hero board-hero"><div><span className="eyebrow"><LayoutDashboard className="size-3.5" /> VISION BOARD</span><h1>Your life,<br/><span>in motion.</span></h1></div><p>Keep your intentions visible. Return to the images and words that make purposeful progress feel real.</p></div>
-    <div className="board-heading board-heading-standalone"><div><span className="eyebrow">YOUR COLLECTION</span><h2>Visions & affirmations</h2></div><div className="board-controls"><Button variant="glass" size="sm" aria-pressed={ambience} onClick={toggleAmbience}><Headphones className={ambience ? "size-3.5 audio-pulse" : "size-3.5"} />{ambience ? "Ambience on" : "Ambience"}</Button><div className="board-tabs" role="tablist" aria-label="Vision board sections"><Button variant={boardTab === "visions" ? "primary" : "glass"} size="sm" role="tab" aria-selected={boardTab === "visions"} onClick={() => setBoardTab("visions")}>Active Visions</Button><Button variant={boardTab === "affirmations" ? "primary" : "glass"} size="sm" role="tab" aria-selected={boardTab === "affirmations"} onClick={() => setBoardTab("affirmations")}><Sparkles className="size-3.5" />Affirmation Wall</Button></div></div></div>
-    {artNotice && <p className="art-notice" role="status">{artNotice}</p>}
-    {boardTab === "visions" ? (goals.length ? <div className="vision-board">{goals.map((goal, index) => { const image = goal.imageUrl ?? images[index % images.length] ?? runnerImage; return <VisionCard key={goal.id} goal={goal} image={image} large={index === 0} generating={generating === goal.id} onGenerate={() => generateArt(goal)} onVisualize={() => setActiveVision({ title: goal.title, image })} onDelete={() => setGoals(goals.filter((g) => g.id !== goal.id))} onEdit={() => { setEditTarget(goal); setEditTitle(goal.title); setEditCategory(goal.category); }} onStatus={() => setGoals(goals.map((g) => g.id === goal.id ? { ...g, status: g.status === "Achieved" ? "In momentum" : g.status === "In momentum" ? "Refining" : "Achieved" } : g))} />; })}<button className="add-tile" onClick={() => setAddOpen(true)}><Plus className="size-5" /><b>Add Vision Tile</b><span>Give the future a place to land.</span></button></div>
-      : <div className="list-empty-card board-empty"><LayoutDashboard className="size-5" /><b>Your board is clear.</b><span>Add the first vision you want to keep in sight.</span><Button variant="primary" size="sm" onClick={() => setAddOpen(true)}><Plus className="size-3.5" />Add Vision Tile</Button></div>)
-      : <AffirmationWall affirmations={affirmations} draft={affirmationDraft} setDraft={setAffirmationDraft} onAdd={(text) => { setAffirmations([{ id: crypto.randomUUID(), text, title: "A personal intention", imageQuery: "calm ocean", createdAt: new Date().toISOString(), palette: affirmations.length % 4, favorite: false }, ...affirmations]); setAffirmationDraft(""); }} onToggleFavorite={(id) => setAffirmations(affirmations.map((item) => item.id === id ? { ...item, favorite: !item.favorite } : item))} onDelete={(id) => setAffirmations(affirmations.filter((item) => item.id !== id))} onRename={(id, text) => setAffirmations(affirmations.map((item) => item.id === id ? { ...item, text } : item))} onRandomize={() => setAffirmationDraft(affirmationIdeas[Math.floor(Math.random() * affirmationIdeas.length)] ?? "I create meaningful momentum with calm, focused action.")} />}
-    <EditVisionDialog goal={editTarget} onClose={() => setEditTarget(null)} title={editTitle} setTitle={setEditTitle} category={editCategory} setCategory={setEditCategory} onSave={() => { if (!editTarget || editTitle.trim().length < 3) return; setGoals(goals.map((item) => item.id === editTarget.id ? { ...item, title: editTitle.trim(), category: editCategory } : item)); setEditTarget(null); }} />
-    <AddVisionDialog open={addOpen} onOpenChange={setAddOpen} title={newGoal} setTitle={setNewGoal} category={newCategory} setCategory={setNewCategory} onAdd={() => addVision(false)} onGenerate={() => addVision(true)} />
-    {activeVision && <FocusVisualization vision={activeVision} onClose={() => setActiveVision(null)} />}
-  </section>;
-}
-
-function imageForQuery(query: string | undefined, index: number) { const value = query?.toLowerCase() ?? ""; if (/desk|studio|plant|work/.test(value)) return studioImage; if (/mountain|mist|trail|forest/.test(value)) return mountainImage; if (/ocean|water|calm|run/.test(value)) return runnerImage; return images[index % images.length] ?? mountainImage; }
-
-function AffirmationWall({ affirmations, draft, setDraft, onAdd, onRandomize, onToggleFavorite, onDelete, onRename }: { affirmations: AffirmationTile[]; draft: string; setDraft: (value: string) => void; onAdd: (value: string) => void; onRandomize: () => void; onToggleFavorite: (id: string) => void; onDelete: (id: string) => void; onRename: (id: string, text: string) => void }) {
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editText, setEditText] = useState("");
-  return <section className="affirmation-wall" aria-label="Affirmation Wall"><div className="affirmation-composer"><div><span className="eyebrow amber"><Sparkles className="size-3.5" /> AFFIRMATION WALL</span><h3>Words your future self already believes.</h3></div><div className="affirmation-entry"><input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="I am becoming…" maxLength={220} aria-label="Personal intention" /><Button variant="glass" onClick={onRandomize}><RefreshCw className="size-4" />Inspire me</Button><Button variant="primary" onClick={() => draft.trim() && onAdd(draft.trim())} disabled={!draft.trim()}><Plus className="size-4" />Add Intention</Button></div></div>{affirmations.length ? <div className="affirmation-grid">{affirmations.map((affirmation, index) => <article className={`affirmation-tile ${index % 5 === 0 ? "wide" : ""}`} key={affirmation.id}><img src={imageForQuery(affirmation.imageQuery, index)} alt="" loading="lazy" /><div className="affirmation-tile-shade" /><div className="affirmation-tile-content"><div className="tile-top"><span><Sparkles className="size-3.5" />Intention</span><div className="tile-tools"><Button variant="icon" size="icon" aria-label={affirmation.favorite ? "Stop meditating on this intention" : "Meditate on this intention"} aria-pressed={affirmation.favorite} className={affirmation.favorite ? "favorite active" : "favorite"} onClick={() => onToggleFavorite(affirmation.id)}><Heart className={affirmation.favorite ? "size-4 fill-current" : "size-4"} /></Button><Button variant="icon" size="icon" aria-label="Edit intention" title="Edit" onClick={() => { setEditingId(affirmation.id); setEditText(affirmation.text); }}><Pencil className="size-3.5" /></Button><ConfirmRemove label="this intention" onConfirm={() => onDelete(affirmation.id)} /></div></div>{affirmation.title && <h4>{affirmation.title}</h4>}{editingId === affirmation.id ? <div className="tile-edit"><textarea value={editText} onChange={(event) => setEditText(event.target.value)} aria-label="Edit intention text" rows={3} /><div><Button variant="primary" size="sm" onClick={() => { if (editText.trim()) onRename(affirmation.id, editText.trim()); setEditingId(null); }}><Check className="size-3.5" />Save</Button><Button variant="ghost" size="sm" onClick={() => setEditingId(null)}>Cancel</Button></div></div> : <blockquote>“{affirmation.text}”</blockquote>}{affirmation.prompt && <p>{affirmation.prompt}</p>}<time>{new Date(affirmation.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</time></div></article>)}</div> : <div className="affirmation-empty"><Sparkles className="size-5" /><b>Your affirmation wall is ready.</b><span>Add a phrase that brings your next chapter into focus.</span><Button variant="glass" size="sm" onClick={onRandomize}><Sparkles className="size-3.5" />Inspire my first intention</Button></div>}</section>;
-}
+function Waveform({ active }: { active: boolean }) { return <div className={active ? "waveform active" : "waveform"} aria-hidden="true">{Array.from({ length: 42 }, (_, i) => <i key={i} style={{ height: `${8 + ((i * 13) % 28)}px`, animationDelay: `${(i % 8) * -0.09}s` }} />)}</div>; }
 
 function ConfirmRemove({ label, onConfirm, confirmLabel, withText }: { label: string; onConfirm: () => void; confirmLabel?: string; withText?: boolean }) {
   const [armed, setArmed] = useState(false);
   useEffect(() => { if (!armed) return; const timer = setTimeout(() => setArmed(false), 5000); return () => clearTimeout(timer); }, [armed]);
   if (!armed) return withText
-    ? <Button variant="ghost" size="sm" onClick={() => setArmed(true)}><Trash2 className="size-3.5" />Clear all</Button>
+    ? <Button variant="ghost" size="sm" onClick={() => setArmed(true)}><Trash2 className="size-3.5" />{confirmLabel ? "Clear" : "Remove"}</Button>
     : <Button variant="icon" size="icon" className="remove-button" aria-label={`Remove ${label}`} title="Remove" onClick={() => setArmed(true)}><Trash2 className="size-3.5" /></Button>;
   return <span className="confirm-remove"><span>{confirmLabel ?? "Remove?"}</span><Button variant="icon" size="icon" className="confirm-yes" aria-label={`Confirm removing ${label}`} onClick={() => { setArmed(false); onConfirm(); }}><Check className="size-3.5" /></Button><Button variant="icon" size="icon" aria-label="Cancel removal" onClick={() => setArmed(false)}><X className="size-3.5" /></Button></span>;
 }
@@ -469,25 +449,14 @@ function ActionsCard({ items, completed, onToggle, onAdd, onRemove, onRename }: 
   </article>;
 }
 
-function EditVisionDialog({ goal, onClose, title, setTitle, category, setCategory, onSave }: { goal: GoalItem | null; onClose: () => void; title: string; setTitle: (value: string) => void; category: string; setCategory: (value: string) => void; onSave: () => void }) { return <Dialog.Root open={goal !== null} onOpenChange={(open) => { if (!open) onClose(); }}><Dialog.Portal><Dialog.Overlay className="dialog-overlay" /><Dialog.Content className="settings-dialog add-vision-dialog"><div className="dialog-head"><div><Dialog.Title>Edit Vision Tile</Dialog.Title><Dialog.Description>Refine the wording or category of this intention.</Dialog.Description></div><Dialog.Close asChild><Button variant="icon" size="icon" aria-label="Close edit dialog"><X className="size-4" /></Button></Dialog.Close></div><div className="add-vision-fields"><label htmlFor="edit-vision">Intention</label><input id="edit-vision" value={title} onChange={(event) => setTitle(event.target.value)} /><label htmlFor="edit-vision-category">Category</label><select id="edit-vision-category" value={category} onChange={(event) => setCategory(event.target.value)}>{["Career", "Fitness", "Mindset", "Creative"].map((item) => <option key={item}>{item}</option>)}</select></div><div className="dialog-actions"><Button variant="glass" onClick={onClose}>Cancel</Button><Button onClick={onSave} disabled={title.trim().length < 3}><Check className="size-4" />Save changes</Button></div></Dialog.Content></Dialog.Portal></Dialog.Root>; }
-
-function VisionCard({ goal, image, large, generating, onStatus, onGenerate, onVisualize, onEdit, onDelete }: { goal: GoalItem; image: string; large: boolean; generating: boolean; onStatus: () => void; onGenerate: () => void; onVisualize: () => void; onEdit: () => void; onDelete: () => void }) { return <article className={large ? "vision-card large" : "vision-card"}><img className={generating ? "vision-image generating" : "vision-image"} src={image} alt="" loading="lazy" width={1280} height={912} /><div className="vision-shade" /><div className="vision-content"><div className="vision-meta"><span>{goal.category}</span><div className="vision-tools"><Button variant="icon" size="icon" aria-label={`Visualize ${goal.title}`} title="Visualize" onClick={onVisualize}><Maximize2 className="size-3.5" /></Button><Button variant="icon" size="icon" aria-label={`Edit ${goal.title}`} title="Edit" onClick={onEdit}><Pencil className="size-3.5" /></Button><ConfirmRemove label={goal.title} onConfirm={onDelete} /><button onClick={onStatus}>{goal.status}</button></div></div><div><p>I am becoming someone who</p><h3>{goal.title}</h3><div className="vision-footer"><span className="milestone">Target · {goal.date}</span><Button variant="glass" size="sm" onClick={onGenerate} disabled={generating}>{generating ? <LoaderCircle className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}{generating ? "Creating art" : "Generate Vision Art"}</Button></div></div></div></article>; }
-
-function AddVisionDialog({ open, onOpenChange, title, setTitle, category, setCategory, onAdd, onGenerate }: { open: boolean; onOpenChange: (open: boolean) => void; title: string; setTitle: (value: string) => void; category: string; setCategory: (value: string) => void; onAdd: () => void; onGenerate: () => void }) { return <Dialog.Root open={open} onOpenChange={onOpenChange}><Dialog.Portal><Dialog.Overlay className="dialog-overlay"/><Dialog.Content className="settings-dialog add-vision-dialog"><div className="dialog-head"><div><Dialog.Title>Add Vision Tile</Dialog.Title><Dialog.Description>Name an intention and choose whether to begin with curated or newly generated art.</Dialog.Description></div><Dialog.Close asChild><Button variant="icon" size="icon" aria-label="Close vision dialog"><X className="size-4"/></Button></Dialog.Close></div><div className="add-vision-fields"><label htmlFor="new-vision">Intention</label><input id="new-vision" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Live and work near the ocean"/><label htmlFor="new-vision-category">Category</label><select id="new-vision-category" value={category} onChange={(event) => setCategory(event.target.value)}>{["Career", "Fitness", "Mindset", "Creative"].map((item) => <option key={item}>{item}</option>)}</select></div><div className="dialog-actions"><Button variant="glass" onClick={onAdd} disabled={title.trim().length < 3}><Plus className="size-4"/>Add Tile</Button><Button onClick={onGenerate} disabled={title.trim().length < 3}><Sparkles className="size-4"/>Generate Vision Art</Button></div></Dialog.Content></Dialog.Portal></Dialog.Root>; }
-
-function FocusVisualization({ vision, onClose }: { vision: { title: string; image: string }; onClose: () => void }) {
-  const [seconds, setSeconds] = useState(60);
-  useEffect(() => {
-    const previousTitle = document.title;
-    document.title = `✨ Focus: ${vision.title}`;
-    const handleFullscreen = () => { if (!document.fullscreenElement) onClose(); };
-    document.addEventListener("fullscreenchange", handleFullscreen);
-    void document.documentElement.requestFullscreen().catch(() => undefined);
-    const interval = window.setInterval(() => setSeconds((value) => value > 0 ? value - 1 : 0), 1000);
-    return () => { window.clearInterval(interval); document.removeEventListener("fullscreenchange", handleFullscreen); document.title = previousTitle; };
-  }, [onClose, vision.title]);
-  const exit = async () => { if (document.fullscreenElement) await document.exitFullscreen().catch(() => undefined); onClose(); };
-  return createPortal(<div className="focus-visualization" role="dialog" aria-modal="true" aria-label={`Visualizing ${vision.title}`}><img src={vision.image} alt=""/><div className="focus-vignette"/><Button variant="icon" size="icon" className="focus-exit" aria-label="Exit visualization" onClick={exit}><X className="size-5"/></Button><div className="focus-copy"><span>Hold the vision gently</span><blockquote>“{vision.title}”</blockquote></div><div className="focus-breath"><i/><b>{seconds}s</b><span>{seconds > 0 ? "Breathe with the circle" : "Carry this feeling forward"}</span></div></div>, document.body);
+function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  return <Dialog.Root open={open} onOpenChange={onOpenChange}><Dialog.Portal><Dialog.Overlay className="dialog-overlay" /><Dialog.Content className="settings-dialog">
+    <div className="dialog-head"><div><Dialog.Title>Intelligence settings</Dialog.Title><Dialog.Description>Private keys stay on the server and never enter browser storage.</Dialog.Description></div><Dialog.Close asChild><Button variant="icon" size="icon" aria-label="Close settings"><X className="size-4" /></Button></Dialog.Close></div>
+    <div className="connection-list">
+      <div><span className="connection-icon cyan"><Waves /></span><div><b>ElevenLabs Scribe</b><p>Voice transcription</p></div><span className="connected">Connected</span></div>
+      <div><span className="connection-icon violet"><BrainCircuit /></span><div><b>Nebius GLM-5.3-Flash</b><p>Reflection analysis</p></div><span className="connected">Connected</span></div>
+      <div><span className="connection-icon violet"><Sparkles /></span><div><b>Lovable AI · gpt-6-astra</b><p>Agentic week planner, roadmaps, follow-up prompts</p></div><span className="connected">Connected</span></div>
+    </div>
+    <div className="privacy-note"><Settings className="size-4" /><p>Reflections are stored only in this browser. Text and audio are sent to the providers above for analysis and transcription, and are not retained by Sensus.</p></div>
+  </Dialog.Content></Dialog.Portal></Dialog.Root>;
 }
-
-function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) { return <Dialog.Root open={open} onOpenChange={onOpenChange}><Dialog.Portal><Dialog.Overlay className="dialog-overlay" /><Dialog.Content className="settings-dialog"><div className="dialog-head"><div><Dialog.Title>Intelligence settings</Dialog.Title><Dialog.Description>Your private keys stay on the server and never enter browser storage.</Dialog.Description></div><Dialog.Close asChild><Button variant="icon" size="icon" aria-label="Close settings"><X className="size-4" /></Button></Dialog.Close></div><div className="connection-list"><div><span className="connection-icon cyan"><Waves /></span><div><b>ElevenLabs Scribe</b><p>Connected securely for voice transcription</p></div><span className="connected">Connected</span></div><div><span className="connection-icon violet"><BrainCircuit /></span><div><b>Nebius Token Factory</b><p>GLM-5.3-Flash connected for live reasoning</p></div><span className="connected">Connected</span></div></div><div className="privacy-note"><Settings className="size-4" /><p>For safety, API keys cannot be entered or overridden in this browser. Manage them through your project’s secure connection settings.</p></div></Dialog.Content></Dialog.Portal></Dialog.Root>; }

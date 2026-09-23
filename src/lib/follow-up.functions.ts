@@ -19,15 +19,9 @@ export type FollowUpResult = {
   error: string;
 };
 
-function safeGatewayMessage(error: unknown) {
-  const value = error as { statusCode?: number; responseBody?: string; message?: string };
-  if (value.statusCode === 402) return "AI credits are currently unavailable. Your reflection is saved; add credits in workspace billing to continue.";
-  if (value.statusCode === 401) return "AI journaling is not configured yet. Your reflection is still saved.";
-  if (value.statusCode === 403) return "AI journaling is currently unavailable for this workspace. Your reflection is still saved.";
-  if (value.statusCode === 429) return "AI journaling is resting after high demand. Please try again in a moment.";
-  if (value.statusCode && value.statusCode >= 500) return "AI journaling is temporarily unavailable. Your reflection is still saved.";
-  return "Sensus could not shape follow-up prompts right now. Your reflection is still saved.";
-}
+import { safeGatewayMessage as gatewayMessage } from "./gateway-errors";
+
+const safeGatewayMessage = (error: unknown) => gatewayMessage(error, "Follow-up prompts");
 
 export const generateFollowUpPrompts = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => inputSchema.parse(input))
