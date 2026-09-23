@@ -19,6 +19,7 @@ import { recordWav } from "./record-wav";
 import { startAmbientAudio, type AmbientAudio } from "@/lib/ambient-audio";
 import { generateFollowUpPrompts } from "@/lib/follow-up.functions";
 import { generateExecutionRoadmap, type ExecutionRoadmap } from "@/lib/roadmap.functions";
+import { planWeekFromReflection, type WeekPlan } from "@/lib/agenda.functions";
 
 const presets = [
   { icon: "⚡", label: "Work overload & imposter loop", text: "I have three major deliverables due this week and I keep thinking everyone will realize I am not capable. I am over-preparing every detail, avoiding asking for help, and staying online late, but I still feel behind." },
@@ -129,14 +130,15 @@ export function SensusApp() {
     </div></header>
     <main className="main-shell">
       <nav className="mode-dock" aria-label="Sensus modes"><button className={mode === "clarity" ? "mode-option active" : "mode-option"} onClick={() => setMode("clarity")}><Mic className="size-4" /><span>Clarity Engine</span></button><button className={mode === "vision" ? "mode-option active" : "mode-option"} onClick={() => setMode("vision")}><Target className="size-4" /><span>Vision & Execution Architecture</span></button><button className={mode === "board" ? "mode-option active" : "mode-option"} onClick={() => setMode("board")}><LayoutDashboard className="size-4" /><span>Vision Board</span></button><button className={mode === "history" ? "mode-option active" : "mode-option"} onClick={() => setMode("history")}><BookOpen className="size-4" /><span>Reflection History</span></button></nav>
-      {mode === "clarity" ? <ClarityView reflections={reflections} setReflections={setReflections} affirmations={affirmations} setAffirmations={setAffirmations} /> : mode === "vision" ? <VisionView goals={goals} setGoals={setGoals} /> : mode === "board" ? <BoardView goals={goals} setGoals={setGoals} affirmations={affirmations} setAffirmations={setAffirmations} /> : <HistoryView reflections={reflections} setReflections={setReflections} />}
+      {mode === "clarity" ? <ClarityView reflections={reflections} setReflections={setReflections} affirmations={affirmations} setAffirmations={setAffirmations} goals={goals} setGoals={setGoals} /> : mode === "vision" ? <VisionView goals={goals} setGoals={setGoals} /> : mode === "board" ? <BoardView goals={goals} setGoals={setGoals} affirmations={affirmations} setAffirmations={setAffirmations} /> : <HistoryView reflections={reflections} setReflections={setReflections} />}
     </main>
     <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
   </div>;
 }
 
-function ClarityView({ reflections, setReflections, affirmations, setAffirmations }: { reflections: Reflection[]; setReflections: (v: Reflection[]) => void; affirmations: AffirmationTile[]; setAffirmations: (v: AffirmationTile[]) => void }) {
+function ClarityView({ reflections, setReflections, affirmations, setAffirmations, goals, setGoals }: { reflections: Reflection[]; setReflections: (v: Reflection[]) => void; affirmations: AffirmationTile[]; setAffirmations: (v: AffirmationTile[]) => void; goals: GoalItem[]; setGoals: (v: GoalItem[]) => void }) {
   const analyze = useServerFn(analyzeSensusInput);
+  const planWeek = useServerFn(planWeekFromReflection);
   const recorder = useRef<Awaited<ReturnType<typeof recordWav>> | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const [recording, setRecording] = useState(false); const [seconds, setSeconds] = useState(0); const [text, setText] = useState("");
