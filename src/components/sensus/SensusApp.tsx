@@ -297,7 +297,7 @@ function ReflectionCard({ reflection, loading, onGenerate, onDelete }: { reflect
   </article>;
 }
 
-function WeekView({ goals, setGoals, plan, setPlan, onSpeak }: { goals: GoalItem[]; setGoals: (v: GoalItem[]) => void; plan: WeekPlan | null; setPlan: (v: WeekPlan | null) => void; onSpeak: () => void }) {
+function WeekView({ goals, setGoals, plan, setPlan, reflections, onSpeak }: { goals: GoalItem[]; setGoals: (v: GoalItem[]) => void; plan: WeekPlan | null; setPlan: (v: WeekPlan | null) => void; reflections: Reflection[]; onSpeak: () => void }) {
   const planWeek = useServerFn(planWeekFromReflection);
   const [brief, setBrief] = useStoredState("sensus-week-brief", "");
   const [planning, setPlanning] = useState(false);
