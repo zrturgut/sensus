@@ -57,6 +57,10 @@
 .vision-image { transition: opacity 1s ease, filter 1s ease, transform 1s ease; }
 .vision-image.generating { opacity: .52; filter: blur(3px) saturate(.7); transform: scale(1.035); }
 .art-notice { margin: 0 0 1rem; color: var(--muted-foreground); font-size: .82rem; animation: fade-in .5s ease both; }
+.context-hint { margin: 0 auto 0 0; color: var(--muted-foreground); font-size: .72rem; }
+.listening-card { display: grid; grid-template-columns: auto 1fr; gap: 1.1rem; margin-top: 2rem; padding: clamp(1.4rem, 3vw, 2.4rem); border: 1px solid var(--border); border-radius: 1.5rem; background: rgb(255 255 255 / .035); box-shadow: 0 8px 32px rgb(0 0 0 / .36); backdrop-filter: blur(28px); }
+.listening-card h2 { margin: .55rem 0 .6rem; font-family: var(--font-reflective); font-size: clamp(1.45rem, 3vw, 2.25rem); font-weight: 400; }
+.listening-card p { max-width: 720px; margin: 0 0 1.15rem; color: var(--muted-foreground); line-height: 1.75; }
 .audio-pulse { animation: soft-audio-pulse 2.4s ease-in-out infinite; }
 @keyframes soft-audio-pulse { 50% { opacity: .5; transform: scale(.88); } }
 
