@@ -126,7 +126,7 @@ export function SensusApp() {
   const [plan, setPlan] = useStoredState<WeekPlan | null>("sensus-week-plan", null);
   return <div className="app-shell min-h-screen bg-background text-foreground"><div className="ambient-aurora" aria-hidden="true"><i className="aurora-sage" /><i className="aurora-lavender" /><i className="aurora-sky" /></div>
     <header className="app-header"><div className="header-inner">
-      <div className="brand"><LogoMark /><p>Speak once. Get the pattern and a scheduled week.</p></div>
+      <div className="brand"><LogoMark /><p>Clear thinking starts with a conversation.</p></div>
     </div></header>
     <main className="main-shell">
       <nav className="mode-dock" aria-label="Sensus modes">
