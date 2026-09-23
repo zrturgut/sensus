@@ -12,3 +12,11 @@
 - [x] Add Vision Board as a dedicated adjacent mode
 - [x] Apply the Neutral Elegance visual system
 - [x] Verify all three modes on desktop and mobile
+- [x] Add luminous aurora depth and glowing glass interactions
+- [x] Add persistent Nebius FLUX Vision Art with curated fallback
+- [x] Add fullscreen visualization, timer, tab focus, and browser ambience
+- [x] Verify Vision Art and focus flows across desktop and mobile
+- [x] Guard short clarity input before analysis
+- [x] Support Nebius insufficient-context responses
+- [x] Show a friendly listening card with scenario shortcuts
+- [x] Verify short and sufficient clarity flows

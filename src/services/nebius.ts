@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 export type ClarityResult = {
+  is_sufficient: true;
   detected_distortion: string;
   reframe: string;
   blind_spot_insight: string;
@@ -19,6 +20,12 @@ export type ClarityResult = {
   source: "nebius" | "demo";
 };
 
+export type InsufficientClarityResult = {
+  is_sufficient: false;
+  guidance_message: string;
+  source: "nebius" | "demo";
+};
+
 export type GoalResult = {
   dream: string;
   internal_friction: string;
@@ -27,7 +34,7 @@ export type GoalResult = {
 };
 
 const inputSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("clarity"), text: z.string().min(20).max(12000) }),
+  z.object({ kind: z.literal("clarity"), text: z.string().min(1).max(12000) }),
   z.object({ kind: z.literal("goal"), title: z.string().min(3).max(160), category: z.string().max(40) }),
 ]);
 
@@ -35,6 +42,7 @@ function clarityFallback(text: string): ClarityResult {
   const burnout = /tired|exhaust|burnout|sleep|morning/i.test(text);
   const overload = /work|deadline|deliver|behind|capable|imposter/i.test(text);
   return {
+    is_sufficient: true,
     detected_distortion: burnout ? "All-or-nothing thinking" : "Catastrophizing + mind reading",
     reframe: burnout
       ? "Low energy is information, not a character verdict. Protect the smallest repeatable action and let consistency rebuild capacity."
@@ -75,7 +83,7 @@ function goalFallback(title: string): GoalResult {
   };
 }
 
-async function requestNebius(prompt: string): Promise<unknown> {
+async function requestNebius(prompt: string, system = "You are a grounded cognitive coach. Return valid JSON only. Avoid diagnosis, certainty, and vague inspiration."): Promise<unknown> {
   const key = process.env["NEBIUS_API_KEY"];
   if (!key) return null;
   const response = await fetch("https://api.tokenfactory.nebius.com/v1/chat/completions", {
@@ -86,7 +94,7 @@ async function requestNebius(prompt: string): Promise<unknown> {
       temperature: 0.4,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: "You are a grounded cognitive coach. Return valid JSON only. Avoid diagnosis, certainty, and vague inspiration." },
+        { role: "system", content: system },
         { role: "user", content: prompt },
       ],
     }),
@@ -106,7 +114,9 @@ export const analyzeSensusInput = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => inputSchema.parse(input))
   .handler(async ({ data }) => {
     if (data.kind === "clarity") {
-      const schema = z.object({
+      const insufficient = z.object({ is_sufficient: z.literal(false), guidance_message: z.string().min(1) });
+      const sufficient = z.object({
+        is_sufficient: z.literal(true),
         detected_distortion: z.string(), reframe: z.string(), blind_spot_insight: z.string(),
         action_items: z.array(z.string()).min(2).max(5), stress_level: z.number().min(1).max(10),
         emotional_tags: z.array(z.string()).min(1).max(5), grounding_micro_habit: z.string(),
@@ -114,8 +124,15 @@ export const analyzeSensusInput = createServerFn({ method: "POST" })
         vision_tile_suggestion: z.object({ title: z.string().max(120), image_query: z.string().max(80) }),
         manifestation_prompt: z.string(),
       });
-      const raw = await requestNebius(`Analyze this reflection: ${data.text}\nReturn one JSON object with keys: detected_distortion, reframe, blind_spot_insight, action_items, stress_level, emotional_tags, grounding_micro_habit, positive_affirmation, affirmation_category, vision_tile_suggestion, manifestation_prompt. positive_affirmation must be a personalized, present-tense, uplifting mantra derived directly from converting the user's specific worry into an empowering strength. affirmation_category must be a short tag such as Inner Peace, Confidence, Focus, or Resilience. vision_tile_suggestion must be an object with a short aspirational title derived from this session and a peaceful image_query such as morning mist mountain, minimal desk plant, or calm ocean. manifestation_prompt must be a short, vivid sentence visualizing today's best possible outcome.`);
-      const parsed = schema.safeParse(raw);
+      const words = data.text.trim().split(/\s+/).filter(Boolean).length;
+      const normalized = data.text.toLowerCase().replace(/[^a-z0-9\s]/g, " ");
+      const personalSignals = /\b(i|i'm|i’ve|my|me|feel|felt|worried|stuck|tense|heavy|today|because|when)\b/i.test(normalized);
+      const trivialSignals = /^(\s*(hello|hi|hey|test|testing|checking|just|123)\s*)+$/i.test(normalized);
+      if (data.text.trim().length < 60 || words < 15 || trivialSignals || !personalSignals) return { is_sufficient: false as const, guidance_message: "It looks like you're just getting started! Share a bit about what's feeling tense, a goal you're stuck on, or what's cluttering your mind right now.", source: "demo" as const };
+      const raw = await requestNebius(`Evaluate and, only when sufficient, analyze this reflection: ${data.text}\nReturn one JSON object. If sufficient, include is_sufficient: true and keys: detected_distortion, reframe, blind_spot_insight, action_items, stress_level, emotional_tags, grounding_micro_habit, positive_affirmation, affirmation_category, vision_tile_suggestion, manifestation_prompt. positive_affirmation must be personalized and present-tense. vision_tile_suggestion must contain title and image_query.`, "You are a grounded cognitive coach. Return valid JSON only. Avoid diagnosis, certainty, and vague inspiration. First evaluate whether the input contains enough real personal context, emotion, or situation to analyze. If it is trivial, a greeting, or test text such as 'hello', 'testing 123', or 'just checking', return only {\"is_sufficient\":false,\"guidance_message\":\"It looks like you're just getting started! Share a bit about what's feeling tense, a goal you're stuck on, or what's cluttering your mind right now.\"}. Only when it is sufficient, return is_sufficient: true with the complete requested analysis.");
+      const insufficientParsed = insufficient.safeParse(raw);
+      if (insufficientParsed.success) return { ...insufficientParsed.data, source: "nebius" as const };
+      const parsed = sufficient.safeParse(raw);
       return parsed.success ? { ...parsed.data, source: "nebius" as const } : clarityFallback(data.text);
     }
     const schema = z.object({ dream: z.string(), internal_friction: z.string(), if_then_plan: z.string() });
