@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import * as Dialog from "@radix-ui/react-dialog";
 import {
-  ArrowRight, BrainCircuit, CalendarCheck, Check, ChevronDown, Copy, Eye, Gauge, Goal, Heart,
-  LayoutDashboard, LoaderCircle, Mic, Pin, Plus, RefreshCw, Settings, Sparkles, Square, Target, Volume2, Waves, X,
+  ArrowRight, BrainCircuit, CalendarCheck, Check, ChevronDown, Copy, Eye, Gauge, Goal, Headphones, Heart,
+  LayoutDashboard, LoaderCircle, Maximize2, Mic, Pin, Plus, RefreshCw, Settings, Sparkles, Square, Target, Volume2, Waves, X,
 } from "lucide-react";
 import runnerImage from "@/assets/vision-runner.jpg";
 import studioImage from "@/assets/vision-studio.jpg";
@@ -12,6 +12,7 @@ import { analyzeSensusInput, type ClarityResult, type GoalResult } from "@/servi
 import { Button } from "./Button";
 import { CalendarActions } from "./CalendarActions";
 import { recordWav } from "./record-wav";
+import { startAmbientAudio, type AmbientAudio } from "@/lib/ambient-audio";
 
 const presets = [
   { icon: "⚡", label: "Work overload & imposter loop", text: "I have three major deliverables due this week and I keep thinking everyone will realize I am not capable. I am over-preparing every detail, avoiding asking for help, and staying online late, but I still feel behind." },
@@ -25,7 +26,7 @@ const affirmationVariations = [
 ];
 
 type Mode = "clarity" | "vision" | "board";
-type GoalItem = { id: string; title: string; category: string; date: string; status: "In momentum" | "Refining" | "Achieved"; analysis?: GoalResult };
+type GoalItem = { id: string; title: string; category: string; date: string; status: "In momentum" | "Refining" | "Achieved"; analysis?: GoalResult; imageUrl?: string; imagePrompt?: string };
 type Reflection = { id: string; text: string; result: ClarityResult; createdAt: string };
 type AffirmationTile = { id: string; text: string; prompt?: string; title?: string; imageQuery?: string; createdAt: string; palette: number; favorite?: boolean };
 const initialGoals: GoalItem[] = [
@@ -115,10 +116,53 @@ function VisionView({ goals, setGoals }: { goals: GoalItem[]; setGoals: (v: Goal
 function BoardView({ goals, setGoals, affirmations, setAffirmations }: { goals: GoalItem[]; setGoals: (v: GoalItem[]) => void; affirmations: AffirmationTile[]; setAffirmations: (v: AffirmationTile[]) => void }) {
   const [boardTab, setBoardTab] = useState<"visions" | "affirmations">("visions");
   const [affirmationDraft, setAffirmationDraft] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
+  const [newGoal, setNewGoal] = useState("");
+  const [newCategory, setNewCategory] = useState("Mindset");
+  const [generating, setGenerating] = useState<string | null>(null);
+  const [artNotice, setArtNotice] = useState("");
+  const [activeVision, setActiveVision] = useState<{ title: string; image: string } | null>(null);
+  const [ambience, setAmbience] = useState(false);
+  const audio = useRef<AmbientAudio | null>(null);
   const affirmationIdeas = ["I create meaningful momentum with calm, focused action.", "I am ready to receive the opportunities I have prepared for.", "My self-trust grows every time I honor one clear promise.", "I move toward my vision with courage, patience, and joyful discipline."] as const;
+  useEffect(() => () => { void audio.current?.stop(); }, []);
+  const toggleAmbience = async () => {
+    if (ambience) { await audio.current?.stop(); audio.current = null; setAmbience(false); return; }
+    try { audio.current = await startAmbientAudio(); setAmbience(true); setArtNotice(""); } catch { setArtNotice("Ambient audio is unavailable in this browser."); }
+  };
+  const generateArt = async (goal: GoalItem) => {
+    if (generating) return;
+    setGenerating(goal.id); setArtNotice("");
+    try {
+      const response = await fetch("/api/generate-vision-art", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subject: goal.title, category: goal.category }) });
+      const body = await response.json().catch(() => null) as { url?: string; prompt?: string; error?: string } | null;
+      if (!response.ok || !body?.url) throw new Error(body?.error ?? "Vision Art could not be created.");
+      setGoals(goals.map((item) => item.id === goal.id ? { ...item, imageUrl: body.url, imagePrompt: body.prompt } : item));
+      setArtNotice("Your new Vision Art is ready.");
+    } catch (caught) { setArtNotice(caught instanceof Error ? caught.message : "Vision Art could not be created. Your curated image remains in place."); }
+    finally { setGenerating(null); }
+  };
+  const addVision = async (withArt: boolean) => {
+    if (newGoal.trim().length < 3) return;
+    const goal: GoalItem = { id: crypto.randomUUID(), title: newGoal.trim(), category: newCategory, date: "12 weeks", status: "In momentum" };
+    setGoals([goal, ...goals]); setNewGoal(""); setAddOpen(false);
+    if (withArt) {
+      setGenerating(goal.id); setArtNotice("Creating your Vision Art…");
+      try {
+        const response = await fetch("/api/generate-vision-art", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subject: goal.title, category: goal.category }) });
+        const body = await response.json().catch(() => null) as { url?: string; prompt?: string; error?: string } | null;
+        if (!response.ok || !body?.url) throw new Error(body?.error ?? "Vision Art could not be created.");
+        setGoals([{ ...goal, imageUrl: body.url, imagePrompt: body.prompt }, ...goals]); setArtNotice("Your new vision and artwork are ready.");
+      } catch (caught) { setArtNotice(caught instanceof Error ? caught.message : "Your vision was saved with curated artwork."); }
+      finally { setGenerating(null); }
+    }
+  };
   return <section className="view-enter"><div className="vision-hero board-hero"><div><span className="eyebrow"><LayoutDashboard className="size-3.5" /> VISION BOARD</span><h1>Your life,<br/><span>in motion.</span></h1></div><p>Keep your intentions visible. Return to the images and words that make purposeful progress feel real.</p></div>
-    <div className="board-heading board-heading-standalone"><div><span className="eyebrow">YOUR COLLECTION</span><h2>Visions & affirmations</h2></div><div className="board-tabs" role="tablist" aria-label="Vision board sections"><Button variant={boardTab === "visions" ? "primary" : "glass"} size="sm" role="tab" aria-selected={boardTab === "visions"} onClick={() => setBoardTab("visions")}>Active Visions</Button><Button variant={boardTab === "affirmations" ? "primary" : "glass"} size="sm" role="tab" aria-selected={boardTab === "affirmations"} onClick={() => setBoardTab("affirmations")}><Sparkles className="size-3.5" />Affirmation Wall</Button></div></div>
-    {boardTab === "visions" ? <div className="vision-board">{goals.map((goal, index) => <VisionCard key={goal.id} goal={goal} image={images[index % images.length] ?? runnerImage} large={index === 0} onStatus={() => setGoals(goals.map((g) => g.id === goal.id ? { ...g, status: g.status === "Achieved" ? "In momentum" : g.status === "In momentum" ? "Refining" : "Achieved" } : g))} />)}<button className="add-tile" onClick={() => setBoardTab("affirmations")}><Plus className="size-5" /><b>Add an intention</b><span>Give the future a place to land.</span></button></div> : <AffirmationWall affirmations={affirmations} draft={affirmationDraft} setDraft={setAffirmationDraft} onAdd={(text) => { setAffirmations([{ id: crypto.randomUUID(), text, title: "A personal intention", imageQuery: "calm ocean", createdAt: new Date().toISOString(), palette: affirmations.length % 4, favorite: false }, ...affirmations]); setAffirmationDraft(""); }} onToggleFavorite={(id) => setAffirmations(affirmations.map((item) => item.id === id ? { ...item, favorite: !item.favorite } : item))} onRandomize={() => setAffirmationDraft(affirmationIdeas[Math.floor(Math.random() * affirmationIdeas.length)] ?? "I create meaningful momentum with calm, focused action.")} />}
+    <div className="board-heading board-heading-standalone"><div><span className="eyebrow">YOUR COLLECTION</span><h2>Visions & affirmations</h2></div><div className="board-controls"><Button variant="glass" size="sm" aria-pressed={ambience} onClick={toggleAmbience}><Headphones className={ambience ? "size-3.5 audio-pulse" : "size-3.5"} />{ambience ? "Ambience on" : "Ambience"}</Button><div className="board-tabs" role="tablist" aria-label="Vision board sections"><Button variant={boardTab === "visions" ? "primary" : "glass"} size="sm" role="tab" aria-selected={boardTab === "visions"} onClick={() => setBoardTab("visions")}>Active Visions</Button><Button variant={boardTab === "affirmations" ? "primary" : "glass"} size="sm" role="tab" aria-selected={boardTab === "affirmations"} onClick={() => setBoardTab("affirmations")}><Sparkles className="size-3.5" />Affirmation Wall</Button></div></div></div>
+    {artNotice && <p className="art-notice" role="status">{artNotice}</p>}
+    {boardTab === "visions" ? <div className="vision-board">{goals.map((goal, index) => { const image = goal.imageUrl ?? images[index % images.length] ?? runnerImage; return <VisionCard key={goal.id} goal={goal} image={image} large={index === 0} generating={generating === goal.id} onGenerate={() => generateArt(goal)} onVisualize={() => setActiveVision({ title: goal.title, image })} onStatus={() => setGoals(goals.map((g) => g.id === goal.id ? { ...g, status: g.status === "Achieved" ? "In momentum" : g.status === "In momentum" ? "Refining" : "Achieved" } : g))} />; })}<button className="add-tile" onClick={() => setAddOpen(true)}><Plus className="size-5" /><b>Add Vision Tile</b><span>Give the future a place to land.</span></button></div> : <AffirmationWall affirmations={affirmations} draft={affirmationDraft} setDraft={setAffirmationDraft} onAdd={(text) => { setAffirmations([{ id: crypto.randomUUID(), text, title: "A personal intention", imageQuery: "calm ocean", createdAt: new Date().toISOString(), palette: affirmations.length % 4, favorite: false }, ...affirmations]); setAffirmationDraft(""); }} onToggleFavorite={(id) => setAffirmations(affirmations.map((item) => item.id === id ? { ...item, favorite: !item.favorite } : item))} onRandomize={() => setAffirmationDraft(affirmationIdeas[Math.floor(Math.random() * affirmationIdeas.length)] ?? "I create meaningful momentum with calm, focused action.")} />}
+    <AddVisionDialog open={addOpen} onOpenChange={setAddOpen} title={newGoal} setTitle={setNewGoal} category={newCategory} setCategory={setNewCategory} onAdd={() => addVision(false)} onGenerate={() => addVision(true)} />
+    {activeVision && <FocusVisualization vision={activeVision} onClose={() => setActiveVision(null)} />}
   </section>;
 }
 
@@ -126,6 +170,23 @@ function imageForQuery(query: string | undefined, index: number) { const value =
 
 function AffirmationWall({ affirmations, draft, setDraft, onAdd, onRandomize, onToggleFavorite }: { affirmations: AffirmationTile[]; draft: string; setDraft: (value: string) => void; onAdd: (value: string) => void; onRandomize: () => void; onToggleFavorite: (id: string) => void }) { return <section className="affirmation-wall" aria-label="Affirmation Wall"><div className="affirmation-composer"><div><span className="eyebrow amber"><Sparkles className="size-3.5" /> AFFIRMATION WALL</span><h3>Words your future self already believes.</h3></div><div className="affirmation-entry"><input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="I am becoming…" maxLength={220} aria-label="Personal intention" /><Button variant="glass" onClick={onRandomize}><RefreshCw className="size-4" />Inspire me</Button><Button variant="primary" onClick={() => draft.trim() && onAdd(draft.trim())} disabled={!draft.trim()}><Plus className="size-4" />Add Intention</Button></div></div>{affirmations.length ? <div className="affirmation-grid">{affirmations.map((affirmation, index) => <article className={`affirmation-tile ${index % 5 === 0 ? "wide" : ""}`} key={affirmation.id}><img src={imageForQuery(affirmation.imageQuery, index)} alt="" loading="lazy" /><div className="affirmation-tile-shade" /><div className="affirmation-tile-content"><div className="tile-top"><span><Sparkles className="size-3.5" />Intention</span><Button variant="icon" size="icon" aria-label={affirmation.favorite ? "Stop meditating on this intention" : "Meditate on this intention"} aria-pressed={affirmation.favorite} className={affirmation.favorite ? "favorite active" : "favorite"} onClick={() => onToggleFavorite(affirmation.id)}><Heart className={affirmation.favorite ? "size-4 fill-current" : "size-4"} /></Button></div>{affirmation.title && <h4>{affirmation.title}</h4>}<blockquote>“{affirmation.text}”</blockquote>{affirmation.prompt && <p>{affirmation.prompt}</p>}<time>{new Date(affirmation.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</time></div></article>)}</div> : <div className="affirmation-empty"><Sparkles className="size-5" /><b>Your affirmation wall is ready.</b><span>Add a phrase that brings your next chapter into focus.</span></div>}</section>; }
 
-function VisionCard({ goal, image, large, onStatus }: { goal: GoalItem; image: string; large: boolean; onStatus: () => void }) { return <article className={large ? "vision-card large" : "vision-card"}><img src={image} alt="" loading="lazy" width={1280} height={912} /><div className="vision-shade" /><div className="vision-content"><div className="vision-meta"><span>{goal.category}</span><button onClick={onStatus}>{goal.status}</button></div><div><p>I am becoming someone who</p><h3>{goal.title}</h3><span className="milestone">Target · {goal.date}</span></div></div></article>; }
+function VisionCard({ goal, image, large, generating, onStatus, onGenerate, onVisualize }: { goal: GoalItem; image: string; large: boolean; generating: boolean; onStatus: () => void; onGenerate: () => void; onVisualize: () => void }) { return <article className={large ? "vision-card large" : "vision-card"}><img className={generating ? "vision-image generating" : "vision-image"} src={image} alt="" loading="lazy" width={1280} height={912} /><div className="vision-shade" /><div className="vision-content"><div className="vision-meta"><span>{goal.category}</span><div className="vision-tools"><Button variant="icon" size="icon" aria-label={`Visualize ${goal.title}`} title="Visualize" onClick={onVisualize}><Maximize2 className="size-3.5" /></Button><button onClick={onStatus}>{goal.status}</button></div></div><div><p>I am becoming someone who</p><h3>{goal.title}</h3><div className="vision-footer"><span className="milestone">Target · {goal.date}</span><Button variant="glass" size="sm" onClick={onGenerate} disabled={generating}>{generating ? <LoaderCircle className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}{generating ? "Creating art" : "Generate Vision Art"}</Button></div></div></div></article>; }
+
+function AddVisionDialog({ open, onOpenChange, title, setTitle, category, setCategory, onAdd, onGenerate }: { open: boolean; onOpenChange: (open: boolean) => void; title: string; setTitle: (value: string) => void; category: string; setCategory: (value: string) => void; onAdd: () => void; onGenerate: () => void }) { return <Dialog.Root open={open} onOpenChange={onOpenChange}><Dialog.Portal><Dialog.Overlay className="dialog-overlay"/><Dialog.Content className="settings-dialog add-vision-dialog"><div className="dialog-head"><div><Dialog.Title>Add Vision Tile</Dialog.Title><Dialog.Description>Name an intention and choose whether to begin with curated or newly generated art.</Dialog.Description></div><Dialog.Close asChild><Button variant="icon" size="icon" aria-label="Close vision dialog"><X className="size-4"/></Button></Dialog.Close></div><div className="add-vision-fields"><label htmlFor="new-vision">Intention</label><input id="new-vision" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Live and work near the ocean"/><label htmlFor="new-vision-category">Category</label><select id="new-vision-category" value={category} onChange={(event) => setCategory(event.target.value)}>{["Career", "Fitness", "Mindset", "Creative"].map((item) => <option key={item}>{item}</option>)}</select></div><div className="dialog-actions"><Button variant="glass" onClick={onAdd} disabled={title.trim().length < 3}><Plus className="size-4"/>Add Tile</Button><Button onClick={onGenerate} disabled={title.trim().length < 3}><Sparkles className="size-4"/>Generate Vision Art</Button></div></Dialog.Content></Dialog.Portal></Dialog.Root>; }
+
+function FocusVisualization({ vision, onClose }: { vision: { title: string; image: string }; onClose: () => void }) {
+  const [seconds, setSeconds] = useState(60);
+  useEffect(() => {
+    const previousTitle = document.title;
+    document.title = `✨ Focus: ${vision.title}`;
+    const handleFullscreen = () => { if (!document.fullscreenElement) onClose(); };
+    document.addEventListener("fullscreenchange", handleFullscreen);
+    void document.documentElement.requestFullscreen().catch(() => undefined);
+    const interval = window.setInterval(() => setSeconds((value) => value > 0 ? value - 1 : 0), 1000);
+    return () => { window.clearInterval(interval); document.removeEventListener("fullscreenchange", handleFullscreen); document.title = previousTitle; };
+  }, [onClose, vision.title]);
+  const exit = async () => { if (document.fullscreenElement) await document.exitFullscreen().catch(() => undefined); onClose(); };
+  return <div className="focus-visualization" role="dialog" aria-modal="true" aria-label={`Visualizing ${vision.title}`}><img src={vision.image} alt=""/><div className="focus-vignette"/><Button variant="icon" size="icon" className="focus-exit" aria-label="Exit visualization" onClick={exit}><X className="size-5"/></Button><div className="focus-copy"><span>Hold the vision gently</span><blockquote>“{vision.title}”</blockquote></div><div className="focus-breath"><i/><b>{seconds}s</b><span>{seconds > 0 ? "Breathe with the circle" : "Carry this feeling forward"}</span></div></div>;
+}
 
 function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) { return <Dialog.Root open={open} onOpenChange={onOpenChange}><Dialog.Portal><Dialog.Overlay className="dialog-overlay" /><Dialog.Content className="settings-dialog"><div className="dialog-head"><div><Dialog.Title>Intelligence settings</Dialog.Title><Dialog.Description>Your private keys stay on the server and never enter browser storage.</Dialog.Description></div><Dialog.Close asChild><Button variant="icon" size="icon" aria-label="Close settings"><X className="size-4" /></Button></Dialog.Close></div><div className="connection-list"><div><span className="connection-icon cyan"><Waves /></span><div><b>ElevenLabs Scribe</b><p>Connected securely for voice transcription</p></div><span className="connected">Connected</span></div><div><span className="connection-icon violet"><BrainCircuit /></span><div><b>Nebius Token Factory</b><p>Add NEBIUS_API_KEY in project secrets for live reasoning</p></div><span className="demo">Demo ready</span></div></div><div className="privacy-note"><Settings className="size-4" /><p>For safety, API keys cannot be entered or overridden in this browser. Manage them through your project’s secure connection settings.</p></div></Dialog.Content></Dialog.Portal></Dialog.Root>; }
