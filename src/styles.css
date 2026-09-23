@@ -125,3 +125,9 @@ button { cursor: pointer; }
   .affirmation-capsule blockquote { font-size: 29px; line-height: 1.4; }
   .goal-builder, .affirmation-composer { padding: 22px; border-radius: 24px; }
 }
+
+/* Keep the breathing guide animated without moving the clickable microphone. */
+.record-aura { animation: none; }
+.record-aura::after { content: ""; position: absolute; inset: -1px; z-index: -1; border: 1px solid color-mix(in oklab, var(--mint) 20%, transparent); border-radius: inherit; animation: idle-breathe 8s ease-in-out infinite; }
+.record-aura.active { animation: none; }
+.record-aura.active::after { animation: meditative-breath 8s ease-in-out infinite; }
