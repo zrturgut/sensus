@@ -226,9 +226,15 @@ function ReflectView({ reflections, setReflections, goals, setGoals, setPlan, on
             onRemove={(key, custom) => custom ? setActionEdits({ ...actionEdits, custom: actionEdits.custom.filter((item) => `custom:${item}` !== key) }) : setActionEdits({ ...actionEdits, removed: [...actionEdits.removed, key] })}
             onRename={(key, label, custom) => custom ? setActionEdits({ ...actionEdits, custom: actionEdits.custom.map((item) => `custom:${item}` === key ? label : item) }) : setActionEdits({ ...actionEdits, renamed: { ...actionEdits.renamed, [key]: label } })} />
           <article className="insight-card wellness-card"><div className="card-top"><span className="icon-box rose"><Gauge /></span><span className="mini-label">WELLNESS PULSE</span></div>
-            <div className="stress-row"><div><span>Capacity today</span><strong className="band-value">{result.stress_band}</strong></div><div className="meter"><i style={{ width: BAND_COPY[result.stress_band].width }} /></div></div>
-            <p className="band-hint">{BAND_COPY[result.stress_band].hint}</p>
-            <div className="tag-row">{result.emotional_tags.map((tag) => <span key={tag}>{tag}</span>)}</div>
+            {(() => {
+              const band = BAND_COPY[result.stress_band] ?? BAND_COPY.Strained;
+              const label = result.stress_band ?? "Strained";
+              return (<>
+                <div className="stress-row"><div><span>Capacity today</span><strong className="band-value">{label}</strong></div><div className="meter"><i style={{ width: band.width }} /></div></div>
+                <p className="band-hint">{band.hint}</p>
+              </>);
+            })()}
+            <div className="tag-row">{(result.emotional_tags ?? []).map((tag) => <span key={tag}>{tag}</span>)}</div>
             <div className="grounding"><Waves className="size-4" /><div><b>2-minute reset</b><p>{result.grounding_micro_habit}</p></div></div>
           </article>
         </div>
