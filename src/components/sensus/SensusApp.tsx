@@ -7,7 +7,7 @@ import {
 import logoAsset from "@/assets/sensus-logo.png.asset.json";
 import { analyzeSensusInput, type ClarityResult, type StressBand } from "@/services/nebius";
 import { Button } from "./Button";
-import { CalendarActions } from "./CalendarActions";
+import { CalendarActions, CalendarBulkActions } from "./CalendarActions";
 import { recordWav } from "./record-wav";
 import { generateFollowUpPrompts } from "@/lib/follow-up.functions";
 import { generateExecutionRoadmap, type ExecutionRoadmap } from "@/lib/roadmap.functions";
@@ -646,6 +646,7 @@ function ExecuteView({ goals, setGoals }: { goals: GoalItem[]; setGoals: (v: Goa
       {featured?.roadmap && <>
         <div className="woop-grid"><div><span>01 · THE DREAM</span><p>{featured.roadmap.dream}</p></div><div><span>02 · INTERNAL FRICTION</span><p>{featured.roadmap.internal_friction}</p></div><div><span>03 · IF—THEN BRIDGE</span><p>{featured.roadmap.if_then_plan}</p><CalendarActions title={`Sensus: ${featured.title}`} /></div></div>
         <div className="roadmap-block view-enter"><div className="roadmap-head"><div><span className="eyebrow">EXECUTION ROADMAP</span><h3>{featured.roadmap.milestones.length} milestones · {featured.roadmap.horizonWeeks} weeks</h3></div><p>{featured.roadmap.weeklyCommitment}</p></div>
+          <div className="bulk-calendar-row"><CalendarBulkActions items={featured.roadmap.milestones.flatMap((milestone) => [{ title: `${featured.title}: ${milestone.title}`, when: milestone.dueDate, details: milestone.outcome }, { title: `First step — ${milestone.firstAction}`, when: milestone.dueDate, details: `${featured.title} · ${milestone.title}` }])} label={`Add all ${featured.roadmap.milestones.length * 2} steps to calendar`} subject="roadmap steps" /></div>
           <ol className="milestone-list">{featured.roadmap.milestones.map((milestone, index) => <li key={milestone.title}><div className="milestone-index">{String(index + 1).padStart(2, "0")}</div><div className="milestone-body"><div className="milestone-top"><b>{milestone.title}</b><span className="milestone-due"><CalendarDays className="size-3.5" />{milestone.dueLabel}</span></div><p>{milestone.outcome}</p><p className="milestone-action"><ArrowRight className="size-3.5" />{milestone.firstAction}</p><CalendarActions title={`${featured.title}: ${milestone.title}`} when={milestone.dueDate} compact /></div></li>)}</ol>
         </div>
       </>}
