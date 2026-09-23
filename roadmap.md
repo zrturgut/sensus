@@ -41,3 +41,6 @@
 - [x] Editable, completable, deletable agenda blocks
 - [x] Non-blocking short-input guidance; founder-credible seed goals; persistent honest safety note
 - [x] Shared gateway error helper; aria-live on async regions
+- [x] Measured advantage panel: live agentic vs single-shot baseline, scored deterministically in code
+- [x] Momentum strip: reflection streak, reflections logged, week completion, capacity trend
+- [x] Toast feedback for planning, scheduling, comparison, and copy actions
