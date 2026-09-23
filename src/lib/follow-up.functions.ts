@@ -53,6 +53,7 @@ export const generateFollowUpPrompts = createServerFn({ method: "POST" })
         },
       });
       const output = await result.output;
+      if (!output) return { ok: false, error: "Sensus completed the reflection but did not return any prompts. Please try again." };
       const prompts = output.prompts.map((prompt) => prompt.trim()).filter(Boolean).slice(0, 4);
       if (prompts.length === 0) return { ok: false, error: "Sensus completed the reflection but did not return any prompts. Please try again." };
       return { ok: true, prompts, gentleFocus: output.gentle_focus.trim(), source: "lovable-ai" };

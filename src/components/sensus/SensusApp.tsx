@@ -105,6 +105,60 @@ function ClarityView({ reflections, setReflections, affirmations, setAffirmation
   </section>;
 }
 
+function HistoryView({ reflections, setReflections }: { reflections: Reflection[]; setReflections: (value: Reflection[]) => void }) {
+  const generate = useServerFn(generateFollowUpPrompts);
+  const [search, setSearch] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [draft, setDraft] = useState("");
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const normalizedSearch = search.trim().toLowerCase();
+  const filtered = reflections.filter((reflection) => {
+    const day = reflection.createdAt.slice(0, 10);
+    if (fromDate && day < fromDate) return false;
+    if (toDate && day > toDate) return false;
+    if (!normalizedSearch) return true;
+    const searchable = [reflection.text, reflection.guidanceMessage, reflection.result?.detected_distortion, reflection.result?.reframe, reflection.result?.blind_spot_insight, ...(reflection.result?.action_items ?? []), ...(reflection.followUpPrompts ?? [])].filter(Boolean).join(" ").toLowerCase();
+    return searchable.includes(normalizedSearch);
+  });
+  const createPrompts = async (reflectionText: string, reflectionId?: string) => {
+    if (reflectionText.trim().length < 60) { setError("Add at least a couple of sentences so Sensus can shape meaningful follow-up questions."); return; }
+    const targetId = reflectionId ?? crypto.randomUUID();
+    setLoadingId(targetId); setError("");
+    try {
+      const response = await generate({ data: { reflection: reflectionText.trim() } });
+      if (!response.ok) { setError(response.error); return; }
+      if (reflectionId) {
+        setReflections(reflections.map((item) => item.id === reflectionId ? { ...item, followUpPrompts: response.prompts, gentleFocus: response.gentleFocus } : item));
+      } else {
+        setReflections([{ id: targetId, text: reflectionText.trim(), followUpPrompts: response.prompts, gentleFocus: response.gentleFocus, createdAt: new Date().toISOString() }, ...reflections].slice(0, 50));
+        setDraft("");
+      }
+    } catch { setError("Sensus could not shape follow-up prompts right now. Your reflection is still here."); }
+    finally { setLoadingId(null); }
+  };
+  const grouped = filtered.reduce<Record<string, Reflection[]>>((groups, reflection) => {
+    const day = reflection.createdAt.slice(0, 10);
+    groups[day] = [...(groups[day] ?? []), reflection];
+    return groups;
+  }, {});
+  return <section className="view-enter history-view">
+    <div className="vision-hero history-hero"><div><span className="eyebrow"><BookOpen className="size-3.5" /> REFLECTION HISTORY</span><h1>Notice what changes<br/><span>when you look back.</span></h1></div><p>Search the thoughts, patterns, guidance, and actions that have shaped your recent days.</p></div>
+    <article className="follow-up-composer"><div className="follow-up-copy"><span className="icon-box mint"><Sparkles className="size-4" /></span><div><span className="eyebrow">CONTINUE THE REFLECTION</span><h2>Let one insight open the next.</h2><p>Paste or write a completed reflection. Sensus will shape four personalized questions for your next journaling session.</p></div></div><div className="follow-up-entry"><textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Today I noticed…" aria-label="Completed reflection"/><div><span>{draft.trim() ? `${draft.trim().split(/\s+/).length} words` : "A couple of sentences is enough"}</span><Button onClick={() => createPrompts(draft)} disabled={draft.trim().length < 60 || loadingId !== null}>{loadingId && !reflections.some((item) => item.id === loadingId) ? <LoaderCircle className="size-4 animate-spin" /> : <Sparkles className="size-4" />}Generate follow-up prompts</Button></div></div></article>
+    {error && <p className="history-error" role="alert">{error}</p>}
+    <div className="history-toolbar"><label className="history-search"><Search className="size-4"/><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search reflections, patterns, or actions" aria-label="Search reflection history"/></label><div className="date-filters"><label><span>From</span><input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)}/></label><label><span>To</span><input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)}/></label>{(search || fromDate || toDate) && <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setFromDate(""); setToDate(""); }}><X className="size-3.5"/>Clear</Button>}</div></div>
+    <div className="history-summary"><span>{filtered.length} {filtered.length === 1 ? "reflection" : "reflections"}</span><span>{Object.keys(grouped).length} {Object.keys(grouped).length === 1 ? "day" : "days"}</span></div>
+    {filtered.length ? <div className="history-timeline">{Object.entries(grouped).map(([day, entries]) => <section className="history-day" key={day}><div className="history-date"><CalendarDays className="size-4"/><time dateTime={day}>{new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</time></div><div className="history-entries">{entries.map((reflection) => <ReflectionHistoryCard key={reflection.id} reflection={reflection} loading={loadingId === reflection.id} onGenerate={() => createPrompts(reflection.text, reflection.id)}/>)}</div></section>)}</div> : <div className="history-empty"><BookOpen className="size-5"/><b>{reflections.length ? "No reflections match this view." : "Your reflection history begins here."}</b><span>{reflections.length ? "Try a different phrase or widen the date range." : "Complete a Clarity Engine reflection or continue one above."}</span></div>}
+  </section>;
+}
+
+function ReflectionHistoryCard({ reflection, loading, onGenerate }: { reflection: Reflection; loading: boolean; onGenerate: () => void }) {
+  const [open, setOpen] = useState(false);
+  const result = reflection.result;
+  return <article className={reflection.guidanceMessage ? "history-card guidance-entry" : "history-card"}><button className="history-card-head" onClick={() => setOpen(!open)} aria-expanded={open}><div><span className="history-kind">{reflection.guidanceMessage ? "Guidance" : result ? result.detected_distortion : "Journal entry"}</span><h3>{reflection.text}</h3><time>{new Date(reflection.createdAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}</time></div><ChevronDown className={open ? "size-4 rotate-180" : "size-4"}/></button>{open && <div className="history-detail view-enter">{reflection.guidanceMessage && <div className="history-guidance"><Waves className="size-4"/><p>{reflection.guidanceMessage}</p></div>}{result && <><div className="history-insight"><span>Grounded perspective</span><blockquote>“{result.reframe}”</blockquote></div><div className="history-insight"><span>Blind-spot mirror</span><p>{result.blind_spot_insight}</p></div><div className="history-actions"><span>Action items</span>{result.action_items.map((action) => <p key={action}><Check className="size-3.5"/>{action}</p>)}</div></>}{reflection.gentleFocus && <p className="gentle-focus"><Sparkles className="size-3.5"/>{reflection.gentleFocus}</p>}{reflection.followUpPrompts?.length ? <div className="prompt-list"><span>Follow-up journal prompts</span>{reflection.followUpPrompts.map((prompt, index) => <div key={prompt}><b>{String(index + 1).padStart(2, "0")}</b><p>{prompt}</p></div>)}</div> : !reflection.guidanceMessage && <Button variant="glass" onClick={onGenerate} disabled={loading}>{loading ? <LoaderCircle className="size-4 animate-spin"/> : <Sparkles className="size-4"/>}{loading ? "Shaping prompts" : "Generate follow-up prompts"}</Button>}</div>}</article>;
+}
+
 function ListeningCard({ message, onPreset }: { message: string; onPreset: (text: string) => void }) { return <article className="listening-card view-enter"><span className="icon-box mint"><Waves className="size-4" /></span><div><span className="eyebrow">SENSUS IS LISTENING...</span><h2>A little more context will reveal the pattern.</h2><p>{message}</p><div className="preset-row">{presets.map((preset) => <button key={preset.label} onClick={() => onPreset(preset.text)}><span>{preset.icon}</span>{preset.label}</button>)}</div></div></article>; }
 
 function DailyAffirmation({ result, onPin, onPlay, onRefresh, audioState, refreshing, notice }: { result: ClarityResult; onPin: () => void; onPlay: () => void; onRefresh: () => void; audioState: "idle" | "loading" | "playing"; refreshing: boolean; notice: string }) { return <article className="affirmation-capsule"><div className="affirmation-inner"><div className="affirmation-heading"><span className="affirmation-category"><Sparkles className="size-3.5" />{result.affirmation_category ?? "Inner Peace"}</span><SourcePill source={result.source} /></div><blockquote>“{result.positive_affirmation ?? "I meet this moment with clarity, self-trust, and the courage to shape what comes next."}”</blockquote><div className="manifestation-line"><span>Today’s frequency</span><p>{result.manifestation_prompt ?? "Picture tonight: your essential progress is made and your energy still feels like your own."}</p></div><div className="affirmation-actions"><Button variant="glass" onClick={onPin}><Pin className="size-4" />Pin to Vision Board</Button><Button variant="glass" onClick={onPlay} disabled={audioState !== "idle"}>{audioState === "loading" ? <LoaderCircle className="size-4 animate-spin" /> : <Volume2 className={audioState === "playing" ? "size-4 audio-pulse" : "size-4"} />}{audioState === "playing" ? "Playing" : audioState === "loading" ? "Preparing" : "Listen"}</Button><Button variant="ghost" onClick={onRefresh} disabled={refreshing}>{refreshing ? <LoaderCircle className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}New Mantra</Button></div>{notice && <p className="affirmation-notice" role="status">{notice}</p>}</div></article>; }
