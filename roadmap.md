@@ -20,7 +20,7 @@
 - [x] Support Nebius insufficient-context responses
 - [x] Show a friendly listening card with scenario shortcuts
 - [x] Verify short and sufficient clarity flows
-- [ ] Add searchable, date-filtered reflection history
-- [ ] Persist guidance entries and AI follow-up prompts
-- [ ] Generate personalized journaling prompts through Lovable AI Gateway
+- [x] Add searchable, date-filtered reflection history
+- [x] Persist guidance entries and AI follow-up prompts
+- [x] Generate personalized journaling prompts through Lovable AI Gateway
 - [ ] Verify history and follow-up flows across desktop and mobile

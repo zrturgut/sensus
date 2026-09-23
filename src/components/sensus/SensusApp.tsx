@@ -3,8 +3,8 @@ import { createPortal } from "react-dom";
 import { useServerFn } from "@tanstack/react-start";
 import * as Dialog from "@radix-ui/react-dialog";
 import {
-  ArrowRight, BrainCircuit, CalendarCheck, Check, ChevronDown, Copy, Eye, Gauge, Goal, Headphones, Heart,
-  LayoutDashboard, LoaderCircle, Maximize2, Mic, Pin, Plus, RefreshCw, Settings, Sparkles, Square, Target, Volume2, Waves, X,
+  ArrowRight, BookOpen, BrainCircuit, CalendarCheck, CalendarDays, Check, ChevronDown, Copy, Eye, Gauge, Goal, Headphones, Heart,
+  LayoutDashboard, LoaderCircle, Maximize2, Mic, Pin, Plus, RefreshCw, Search, Settings, Sparkles, Square, Target, Volume2, Waves, X,
 } from "lucide-react";
 import runnerImage from "@/assets/vision-runner.jpg";
 import studioImage from "@/assets/vision-studio.jpg";
@@ -14,6 +14,7 @@ import { Button } from "./Button";
 import { CalendarActions } from "./CalendarActions";
 import { recordWav } from "./record-wav";
 import { startAmbientAudio, type AmbientAudio } from "@/lib/ambient-audio";
+import { generateFollowUpPrompts } from "@/lib/follow-up.functions";
 
 const presets = [
   { icon: "⚡", label: "Work overload & imposter loop", text: "I have three major deliverables due this week and I keep thinking everyone will realize I am not capable. I am over-preparing every detail, avoiding asking for help, and staying online late, but I still feel behind." },
@@ -26,9 +27,9 @@ const affirmationVariations = [
   "I welcome today’s opportunities with an open heart, a clear mind, and purposeful momentum.",
 ];
 
-type Mode = "clarity" | "vision" | "board";
+type Mode = "clarity" | "vision" | "board" | "history";
 type GoalItem = { id: string; title: string; category: string; date: string; status: "In momentum" | "Refining" | "Achieved"; analysis?: GoalResult; imageUrl?: string; imagePrompt?: string };
-type Reflection = { id: string; text: string; result: ClarityResult; createdAt: string };
+type Reflection = { id: string; text: string; result?: ClarityResult; guidanceMessage?: string; followUpPrompts?: string[]; gentleFocus?: string; createdAt: string };
 type AffirmationTile = { id: string; text: string; prompt?: string; title?: string; imageQuery?: string; createdAt: string; palette: number; favorite?: boolean };
 const initialGoals: GoalItem[] = [
   { id: "run", title: "Run a half-marathon", category: "Fitness", date: "Nov 16", status: "In momentum" },
@@ -61,8 +62,8 @@ export function SensusApp() {
       <div className="header-actions"><div className="status-cluster"><span className="status-badge"><i className="status-dot cyan" />Speech <b>ElevenLabs Scribe</b></span><span className="status-badge"><i className="status-dot mint" />Reasoning <b>Nebius Token Factory</b></span></div><Button variant="icon" size="icon" aria-label="Open settings" onClick={() => setSettingsOpen(true)}><Settings className="size-4" /></Button></div>
     </div></header>
     <main className="main-shell">
-      <nav className="mode-dock" aria-label="Sensus modes"><button className={mode === "clarity" ? "mode-option active" : "mode-option"} onClick={() => setMode("clarity")}><Mic className="size-4" /><span>Clarity Engine</span></button><button className={mode === "vision" ? "mode-option active" : "mode-option"} onClick={() => setMode("vision")}><Target className="size-4" /><span>Vision & Grounded Manifestation</span></button><button className={mode === "board" ? "mode-option active" : "mode-option"} onClick={() => setMode("board")}><LayoutDashboard className="size-4" /><span>Vision Board</span></button></nav>
-      {mode === "clarity" ? <ClarityView reflections={reflections} setReflections={setReflections} affirmations={affirmations} setAffirmations={setAffirmations} /> : mode === "vision" ? <VisionView goals={goals} setGoals={setGoals} /> : <BoardView goals={goals} setGoals={setGoals} affirmations={affirmations} setAffirmations={setAffirmations} />}
+      <nav className="mode-dock" aria-label="Sensus modes"><button className={mode === "clarity" ? "mode-option active" : "mode-option"} onClick={() => setMode("clarity")}><Mic className="size-4" /><span>Clarity Engine</span></button><button className={mode === "vision" ? "mode-option active" : "mode-option"} onClick={() => setMode("vision")}><Target className="size-4" /><span>Vision & Grounded Manifestation</span></button><button className={mode === "board" ? "mode-option active" : "mode-option"} onClick={() => setMode("board")}><LayoutDashboard className="size-4" /><span>Vision Board</span></button><button className={mode === "history" ? "mode-option active" : "mode-option"} onClick={() => setMode("history")}><BookOpen className="size-4" /><span>Reflection History</span></button></nav>
+      {mode === "clarity" ? <ClarityView reflections={reflections} setReflections={setReflections} affirmations={affirmations} setAffirmations={setAffirmations} /> : mode === "vision" ? <VisionView goals={goals} setGoals={setGoals} /> : mode === "board" ? <BoardView goals={goals} setGoals={setGoals} affirmations={affirmations} setAffirmations={setAffirmations} /> : <HistoryView reflections={reflections} setReflections={setReflections} />}
     </main>
     <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
   </div>;
@@ -73,7 +74,7 @@ function ClarityView({ reflections, setReflections, affirmations, setAffirmation
   const recorder = useRef<Awaited<ReturnType<typeof recordWav>> | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const [recording, setRecording] = useState(false); const [seconds, setSeconds] = useState(0); const [text, setText] = useState("");
-  const [result, setResult] = useState<ClarityResult | null>(reflections[0]?.result ?? null); const [loading, setLoading] = useState(false); const [error, setError] = useState(""); const [completed, setCompleted] = useStoredState<string[]>("sensus-actions", []); const [drawer, setDrawer] = useState(false); const [question, setQuestion] = useState("");
+  const [result, setResult] = useState<ClarityResult | null>(reflections.find((item) => item.result)?.result ?? null); const [loading, setLoading] = useState(false); const [error, setError] = useState(""); const [completed, setCompleted] = useStoredState<string[]>("sensus-actions", []); const [drawer, setDrawer] = useState(false); const [question, setQuestion] = useState("");
   const [guidance, setGuidance] = useState("");
   const [affirmationLoading, setAffirmationLoading] = useState(false); const [audioState, setAudioState] = useState<"idle" | "loading" | "playing">("idle"); const [affirmationNotice, setAffirmationNotice] = useState("");
   const toggleRecording = async () => {
@@ -85,7 +86,7 @@ function ClarityView({ reflections, setReflections, affirmations, setAffirmation
   const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
   const enoughContext = text.trim().length >= 60 && wordCount >= 15;
   const shortGuidance = "Tell Sensus a little more about what's on your mind, what happened today, or what feels heavy right now (at least a couple of sentences) so we can find the pattern.";
-  const runAnalysis = async () => { if (!enoughContext) { setGuidance(shortGuidance); setResult(null); return; } setLoading(true); setError(""); setGuidance(""); try { const next = await analyze({ data: { kind: "clarity", text } }); if (!("is_sufficient" in next)) throw new Error("Unexpected analysis response"); if (next.is_sufficient) { setResult(next); setReflections([{ id: crypto.randomUUID(), text, result: next, createdAt: new Date().toISOString() }, ...reflections].slice(0, 20)); } else { setResult(null); setGuidance(next.guidance_message); } } catch { setError("Analysis is unavailable right now. Your reflection is still here."); } finally { setLoading(false); } };
+  const runAnalysis = async () => { if (!enoughContext) { setGuidance(shortGuidance); setResult(null); return; } setLoading(true); setError(""); setGuidance(""); try { const next = await analyze({ data: { kind: "clarity", text } }); if (!("is_sufficient" in next)) throw new Error("Unexpected analysis response"); if (next.is_sufficient) { setResult(next); setReflections([{ id: crypto.randomUUID(), text, result: next, createdAt: new Date().toISOString() }, ...reflections].slice(0, 50)); } else { setResult(null); setGuidance(next.guidance_message); setReflections([{ id: crypto.randomUUID(), text, guidanceMessage: next.guidance_message, createdAt: new Date().toISOString() }, ...reflections].slice(0, 50)); } } catch { setError("Analysis is unavailable right now. Your reflection is still here."); } finally { setLoading(false); } };
   const toggleAction = (action: string) => setCompleted(completed.includes(action) ? completed.filter((item) => item !== action) : [...completed, action]);
   const pinAffirmation = () => { if (!result) return; const affirmation = result.positive_affirmation ?? "I meet this moment with clarity, self-trust, and the courage to shape what comes next."; if (affirmations.some((item) => item.text === affirmation)) { setAffirmationNotice("Already glowing on your Affirmation Wall."); return; } setAffirmations([{ id: crypto.randomUUID(), text: affirmation, prompt: result.manifestation_prompt, title: result.vision_tile_suggestion?.title, imageQuery: result.vision_tile_suggestion?.image_query, createdAt: new Date().toISOString(), palette: affirmations.length % 4, favorite: false }, ...affirmations]); setAffirmationNotice("Pinned to your Affirmation Wall."); };
   const refreshAffirmation = async () => { if (!text.trim() || affirmationLoading) return; setAffirmationLoading(true); setAffirmationNotice(""); try { const next = await analyze({ data: { kind: "clarity", text: `${text}\nCreate a fresh affirmation variation for this moment.` } }); if ("reframe" in next && result) { const generated = next.positive_affirmation; const fresh = generated && generated !== result.positive_affirmation ? generated : affirmationVariations.find((item) => item !== result.positive_affirmation) ?? "I turn pressure into clear priorities and meet today with steady self-trust."; setResult({ ...result, positive_affirmation: fresh, affirmation_category: next.affirmation_category, vision_tile_suggestion: next.vision_tile_suggestion, manifestation_prompt: next.manifestation_prompt, source: next.source }); } } catch { setAffirmationNotice("A fresh affirmation is unavailable right now."); } finally { setAffirmationLoading(false); } };
