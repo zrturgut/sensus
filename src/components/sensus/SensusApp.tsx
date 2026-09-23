@@ -143,12 +143,18 @@ export function SensusApp() {
         : mode === "week"
           ? <WeekView goals={goals} setGoals={setGoals} plan={plan} setPlan={setPlan} reflections={reflections} onSpeak={() => setMode("reflect")} />
           : mode === "progress"
-            ? <ProgressView goals={goals} plan={plan} onNavigate={setMode} />
+            ? <ProgressView goals={goals} plan={plan} reflections={reflections} onNavigate={setMode} />
             : <ExecuteView goals={goals} setGoals={setGoals} />}
       <div className="safety-note app-footer-note"><ShieldCheck className="size-4" /><p><b>Responsible AI:</b> Sensus is a non-clinical tool for cognitive productivity, not therapy or medical advice. Your reflections stay in this browser; text and audio are sent to AI providers for analysis and transcription only, and are not retained by Sensus.</p></div>
     </main>
   </div>;
 }
+
+const PACE_COPY: Record<string, string> = {
+  Steady: "Capacity is steady — you can hold this pace and add one stretch block.",
+  Strained: "Capacity is strained — protect the top two blocks and let the rest slide.",
+  Depleted: "Capacity is depleted — cut the week back to one block a day and keep the reset.",
+};
 
 function DashboardView({ goals, plan, reflections, onNavigate }: { goals: GoalItem[]; plan: WeekPlan | null; reflections: Reflection[]; onNavigate: (mode: Mode) => void }) {
   const total = plan?.blocks.length ?? 0;
@@ -174,7 +180,8 @@ function DashboardView({ goals, plan, reflections, onNavigate }: { goals: GoalIt
       <div className="dash-progress-top"><div><span className="mini-label"><Gauge className="size-3.5" /> WEEK PROGRESS</span><h2>{total ? `${completion}% of this week's blocks done` : "No week planned yet"}</h2></div>{total > 0 && <strong className="dash-progress-count">{done}/{total}</strong>}</div>
       <div className="dash-meter" role="progressbar" aria-valuenow={completion} aria-valuemin={0} aria-valuemax={100} aria-label="Week completion"><i style={{ width: `${completion}%` }} /></div>
       <p className="dash-progress-sub">{total ? (completion === 100 ? "Every block complete. Take the win." : `${total - done} block${total - done === 1 ? "" : "s"} still open this week.`) : "Speak about your week and Sensus will fill this in."}</p>
-      <div className="dash-progress-meta"><span>{goals.length} goal{goals.length === 1 ? "" : "s"} in play</span><span>{achieved} achieved</span><span>{reflections.length} reflection{reflections.length === 1 ? "" : "s"} logged</span></div>
+      <div className="dash-progress-meta"><span>{goals.length} goal{goals.length === 1 ? "" : "s"} in play</span><span>{achieved} achieved</span><span>{reflections.length} reflection{reflections.length === 1 ? "" : "s"} logged</span>{latest && <span className={`capacity-chip band-${(latest.stress_band ?? "Strained").toLowerCase()}`}><Gauge className="size-3" />Capacity: {latest.stress_band ?? "Strained"}</span>}</div>
+      {latest && <p className="dash-progress-sub capacity-line">{PACE_COPY[latest.stress_band ?? "Strained"] ?? PACE_COPY["Strained"]}</p>}
     </article>
 
     <div className="dash-grid">
@@ -205,7 +212,10 @@ function DashboardView({ goals, plan, reflections, onNavigate }: { goals: GoalIt
 }
 
 /** Per-goal progress: completed agenda blocks, time invested, and distance to completion. */
-function ProgressView({ goals, plan, onNavigate }: { goals: GoalItem[]; plan: WeekPlan | null; onNavigate: (mode: Mode) => void }) {
+function ProgressView({ goals, plan, reflections, onNavigate }: { goals: GoalItem[]; plan: WeekPlan | null; reflections: Reflection[]; onNavigate: (mode: Mode) => void }) {
+  const signals = reflections.filter((item) => item.result).slice(0, 5);
+  const latest = signals[0]?.result ?? null;
+  const band = latest?.stress_band ?? "Strained";
   const stats = useMemo(() => {
     const blocks = plan?.blocks ?? [];
     const now = Date.now();
@@ -246,7 +256,16 @@ function ProgressView({ goals, plan, onNavigate }: { goals: GoalItem[]; plan: We
       <div className="dash-progress-top"><div><span className="mini-label"><Gauge className="size-3.5" /> OVERALL MOMENTUM</span><h2>{goals.length ? `${overall}% average completion` : "No goals yet"}</h2></div>{goals.length > 0 && <strong className="dash-progress-count">{timeLabel}<span className="dash-progress-unit"> invested</span></strong>}</div>
       <div className="dash-meter" role="progressbar" aria-valuenow={overall} aria-valuemin={0} aria-valuemax={100} aria-label="Overall goal completion"><i style={{ width: `${overall}%` }} /></div>
       <p className="dash-progress-sub">{withWork.length ? `${withWork.length} of ${goals.length} goals have scheduled work or milestones behind them.` : "Schedule your week or build a roadmap and progress will start counting."}</p>
+      <div className="dash-progress-meta"><span>{reflections.length} reflection{reflections.length === 1 ? "" : "s"} logged</span>{latest && <span className={`capacity-chip band-${band.toLowerCase()}`}><Gauge className="size-3" />Capacity: {band}</span>}</div>
     </article>
+
+    {latest ? <article className="dash-card dash-signal">
+      <div className="dash-card-head"><div><span className="mini-label"><BrainCircuit className="size-3.5" /> CAPACITY & LATEST SIGNAL</span><h3>{latest.detected_distortion} · {band}</h3></div><Button variant="ghost" size="sm" onClick={() => onNavigate("reflect")}>Reflect again<ArrowRight className="size-3.5" /></Button></div>
+      <blockquote>“{latest.reframe}”</blockquote>
+      <p className="dash-progress-sub capacity-line">{PACE_COPY[band] ?? PACE_COPY["Strained"]}</p>
+      {signals.length > 1 && <div className="capacity-trend">{[...signals].reverse().map((item, index) => <span key={item.id} className={`capacity-chip band-${(item.result?.stress_band ?? "Strained").toLowerCase()}`}>{index === signals.length - 1 ? "Now" : item.result?.stress_band ?? "Strained"}</span>)}</div>}
+    </article>
+      : <div className="dash-empty"><BrainCircuit className="size-5" /><span>Reflect once and your capacity band plus reframe will appear here automatically.</span><Button variant="glass" size="sm" onClick={() => onNavigate("reflect")}>Start reflecting<ArrowRight className="size-3.5" /></Button></div>}
 
     {stats.length ? <div className="progress-goal-list">{stats.map(({ goal, linked, doneBlocks, minutesDone, minutesTotal, milestones, milestonesHit, completion }) => {
       const h = Math.floor(minutesDone / 60);
@@ -292,7 +311,7 @@ function ReflectView({ reflections, setReflections, goals, setGoals, setPlan, on
     try {
       const next = await analyze({ data: { text } });
       const entry = { id: crypto.randomUUID(), text, createdAt: new Date().toISOString() };
-      if (next.is_sufficient) { setResult(next); setReflections([{ ...entry, result: next }, ...reflections].slice(0, 50)); }
+      if (next.is_sufficient) { setResult(next); setReflections([{ ...entry, result: next }, ...reflections].slice(0, 50)); toast.success(`Capacity: ${next.stress_band}. Dashboard and Progress updated.`); }
       else { setResult(null); setGuidance(next.guidance_message); setReflections([{ ...entry, guidanceMessage: next.guidance_message }, ...reflections].slice(0, 50)); }
     } catch { setError("Analysis is unavailable right now. Your reflection is still here."); }
     finally { setLoading(false); }
