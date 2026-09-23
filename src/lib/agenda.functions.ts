@@ -158,12 +158,20 @@ export const planWeekFromReflection = createServerFn({ method: "POST" })
           summary: summary || "Your week is mapped into short, realistic blocks.",
           goals,
           blocks,
+          meta: {
+            model: MODEL,
+            toolCalls,
+            goalsLinked: goals.filter((goal) => goal.existingGoalId).length,
+            goalsCreated: goals.filter((goal) => !goal.existingGoalId).length,
+            blocksScheduled: blocks.length,
+            latencyMs: Date.now() - startedAt,
+          },
           createdAt: new Date().toISOString(),
           source: "lovable-ai",
         },
       };
     } catch (error) {
       console.error("Week planning failed", error);
-      return { ok: false, error: safeGatewayMessage(error) };
+      return { ok: false, error: safeGatewayMessage(error, "Week planning") };
     }
   });
