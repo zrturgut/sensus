@@ -10,6 +10,8 @@ import logoAsset from "@/assets/sensus-logo.png.asset.json";
 import runnerImage from "@/assets/vision-runner.jpg";
 import studioImage from "@/assets/vision-studio.jpg";
 import mountainImage from "@/assets/vision-mountain.jpg";
+import seasideImage from "@/assets/vision-seaside.jpg";
+import atelierImage from "@/assets/vision-atelier.jpg";
 import { analyzeSensusInput, type ClarityResult, type GoalResult } from "@/services/nebius";
 import { Button } from "./Button";
 import { CalendarActions } from "./CalendarActions";
@@ -39,8 +41,10 @@ const initialGoals: GoalItem[] = [
   { id: "run", title: "Run a half-marathon", category: "Fitness", date: "Nov 16", status: "In momentum" },
   { id: "ship", title: "Ship the AI product", category: "Career", date: "Oct 30", status: "Refining" },
   { id: "clarity", title: "Protect a clear mind", category: "Mindset", date: "Daily", status: "In momentum" },
+  { id: "sea", title: "Live and work near the ocean", category: "Mindset", date: "2027", status: "Refining" },
+  { id: "atelier", title: "Fill a canvas every month", category: "Creative", date: "Monthly", status: "In momentum" },
 ];
-const images = [runnerImage, studioImage, mountainImage];
+const images = [runnerImage, studioImage, mountainImage, seasideImage, atelierImage];
 
 function useStoredState<T>(key: string, initial: T) {
   const [value, setValue] = useState(initial);
