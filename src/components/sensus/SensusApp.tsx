@@ -150,6 +150,12 @@ export function SensusApp() {
   </div>;
 }
 
+const PACE_COPY: Record<string, string> = {
+  Steady: "Capacity is steady — you can hold this pace and add one stretch block.",
+  Strained: "Capacity is strained — protect the top two blocks and let the rest slide.",
+  Depleted: "Capacity is depleted — cut the week back to one block a day and keep the reset.",
+};
+
 function DashboardView({ goals, plan, reflections, onNavigate }: { goals: GoalItem[]; plan: WeekPlan | null; reflections: Reflection[]; onNavigate: (mode: Mode) => void }) {
   const total = plan?.blocks.length ?? 0;
   const done = plan?.blocks.filter((block) => block.done).length ?? 0;
