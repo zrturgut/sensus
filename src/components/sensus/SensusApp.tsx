@@ -3,8 +3,8 @@ import { createPortal } from "react-dom";
 import { useServerFn } from "@tanstack/react-start";
 import * as Dialog from "@radix-ui/react-dialog";
 import {
-  ArrowRight, BrainCircuit, CalendarCheck, Check, ChevronDown, Copy, Eye, Gauge, Goal, Headphones, Heart,
-  LayoutDashboard, LoaderCircle, Maximize2, Mic, Pin, Plus, RefreshCw, Settings, Sparkles, Square, Target, Volume2, Waves, X,
+  ArrowRight, BookOpen, BrainCircuit, CalendarCheck, CalendarDays, Check, ChevronDown, Copy, Eye, Gauge, Goal, Headphones, Heart,
+  LayoutDashboard, LoaderCircle, Maximize2, Mic, Pin, Plus, RefreshCw, Search, Settings, Sparkles, Square, Target, Volume2, Waves, X,
 } from "lucide-react";
 import runnerImage from "@/assets/vision-runner.jpg";
 import studioImage from "@/assets/vision-studio.jpg";
@@ -14,6 +14,7 @@ import { Button } from "./Button";
 import { CalendarActions } from "./CalendarActions";
 import { recordWav } from "./record-wav";
 import { startAmbientAudio, type AmbientAudio } from "@/lib/ambient-audio";
+import { generateFollowUpPrompts } from "@/lib/follow-up.functions";
 
 const presets = [
   { icon: "⚡", label: "Work overload & imposter loop", text: "I have three major deliverables due this week and I keep thinking everyone will realize I am not capable. I am over-preparing every detail, avoiding asking for help, and staying online late, but I still feel behind." },
@@ -26,9 +27,9 @@ const affirmationVariations = [
   "I welcome today’s opportunities with an open heart, a clear mind, and purposeful momentum.",
 ];
 
-type Mode = "clarity" | "vision" | "board";
+type Mode = "clarity" | "vision" | "board" | "history";
 type GoalItem = { id: string; title: string; category: string; date: string; status: "In momentum" | "Refining" | "Achieved"; analysis?: GoalResult; imageUrl?: string; imagePrompt?: string };
-type Reflection = { id: string; text: string; result: ClarityResult; createdAt: string };
+type Reflection = { id: string; text: string; result?: ClarityResult; guidanceMessage?: string; followUpPrompts?: string[]; gentleFocus?: string; createdAt: string };
 type AffirmationTile = { id: string; text: string; prompt?: string; title?: string; imageQuery?: string; createdAt: string; palette: number; favorite?: boolean };
 const initialGoals: GoalItem[] = [
   { id: "run", title: "Run a half-marathon", category: "Fitness", date: "Nov 16", status: "In momentum" },
@@ -61,8 +62,8 @@ export function SensusApp() {
       <div className="header-actions"><div className="status-cluster"><span className="status-badge"><i className="status-dot cyan" />Speech <b>ElevenLabs Scribe</b></span><span className="status-badge"><i className="status-dot mint" />Reasoning <b>Nebius Token Factory</b></span></div><Button variant="icon" size="icon" aria-label="Open settings" onClick={() => setSettingsOpen(true)}><Settings className="size-4" /></Button></div>
     </div></header>
     <main className="main-shell">
-      <nav className="mode-dock" aria-label="Sensus modes"><button className={mode === "clarity" ? "mode-option active" : "mode-option"} onClick={() => setMode("clarity")}><Mic className="size-4" /><span>Clarity Engine</span></button><button className={mode === "vision" ? "mode-option active" : "mode-option"} onClick={() => setMode("vision")}><Target className="size-4" /><span>Vision & Grounded Manifestation</span></button><button className={mode === "board" ? "mode-option active" : "mode-option"} onClick={() => setMode("board")}><LayoutDashboard className="size-4" /><span>Vision Board</span></button></nav>
-      {mode === "clarity" ? <ClarityView reflections={reflections} setReflections={setReflections} affirmations={affirmations} setAffirmations={setAffirmations} /> : mode === "vision" ? <VisionView goals={goals} setGoals={setGoals} /> : <BoardView goals={goals} setGoals={setGoals} affirmations={affirmations} setAffirmations={setAffirmations} />}
+      <nav className="mode-dock" aria-label="Sensus modes"><button className={mode === "clarity" ? "mode-option active" : "mode-option"} onClick={() => setMode("clarity")}><Mic className="size-4" /><span>Clarity Engine</span></button><button className={mode === "vision" ? "mode-option active" : "mode-option"} onClick={() => setMode("vision")}><Target className="size-4" /><span>Vision & Grounded Manifestation</span></button><button className={mode === "board" ? "mode-option active" : "mode-option"} onClick={() => setMode("board")}><LayoutDashboard className="size-4" /><span>Vision Board</span></button><button className={mode === "history" ? "mode-option active" : "mode-option"} onClick={() => setMode("history")}><BookOpen className="size-4" /><span>Reflection History</span></button></nav>
+      {mode === "clarity" ? <ClarityView reflections={reflections} setReflections={setReflections} affirmations={affirmations} setAffirmations={setAffirmations} /> : mode === "vision" ? <VisionView goals={goals} setGoals={setGoals} /> : mode === "board" ? <BoardView goals={goals} setGoals={setGoals} affirmations={affirmations} setAffirmations={setAffirmations} /> : <HistoryView reflections={reflections} setReflections={setReflections} />}
     </main>
     <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
   </div>;
@@ -73,7 +74,7 @@ function ClarityView({ reflections, setReflections, affirmations, setAffirmation
   const recorder = useRef<Awaited<ReturnType<typeof recordWav>> | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const [recording, setRecording] = useState(false); const [seconds, setSeconds] = useState(0); const [text, setText] = useState("");
-  const [result, setResult] = useState<ClarityResult | null>(reflections[0]?.result ?? null); const [loading, setLoading] = useState(false); const [error, setError] = useState(""); const [completed, setCompleted] = useStoredState<string[]>("sensus-actions", []); const [drawer, setDrawer] = useState(false); const [question, setQuestion] = useState("");
+  const [result, setResult] = useState<ClarityResult | null>(reflections.find((item) => item.result)?.result ?? null); const [loading, setLoading] = useState(false); const [error, setError] = useState(""); const [completed, setCompleted] = useStoredState<string[]>("sensus-actions", []); const [drawer, setDrawer] = useState(false); const [question, setQuestion] = useState("");
   const [guidance, setGuidance] = useState("");
   const [affirmationLoading, setAffirmationLoading] = useState(false); const [audioState, setAudioState] = useState<"idle" | "loading" | "playing">("idle"); const [affirmationNotice, setAffirmationNotice] = useState("");
   const toggleRecording = async () => {
@@ -85,7 +86,7 @@ function ClarityView({ reflections, setReflections, affirmations, setAffirmation
   const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
   const enoughContext = text.trim().length >= 60 && wordCount >= 15;
   const shortGuidance = "Tell Sensus a little more about what's on your mind, what happened today, or what feels heavy right now (at least a couple of sentences) so we can find the pattern.";
-  const runAnalysis = async () => { if (!enoughContext) { setGuidance(shortGuidance); setResult(null); return; } setLoading(true); setError(""); setGuidance(""); try { const next = await analyze({ data: { kind: "clarity", text } }); if (!("is_sufficient" in next)) throw new Error("Unexpected analysis response"); if (next.is_sufficient) { setResult(next); setReflections([{ id: crypto.randomUUID(), text, result: next, createdAt: new Date().toISOString() }, ...reflections].slice(0, 20)); } else { setResult(null); setGuidance(next.guidance_message); } } catch { setError("Analysis is unavailable right now. Your reflection is still here."); } finally { setLoading(false); } };
+  const runAnalysis = async () => { if (!enoughContext) { setGuidance(shortGuidance); setResult(null); return; } setLoading(true); setError(""); setGuidance(""); try { const next = await analyze({ data: { kind: "clarity", text } }); if (!("is_sufficient" in next)) throw new Error("Unexpected analysis response"); if (next.is_sufficient) { setResult(next); setReflections([{ id: crypto.randomUUID(), text, result: next, createdAt: new Date().toISOString() }, ...reflections].slice(0, 50)); } else { setResult(null); setGuidance(next.guidance_message); setReflections([{ id: crypto.randomUUID(), text, guidanceMessage: next.guidance_message, createdAt: new Date().toISOString() }, ...reflections].slice(0, 50)); } } catch { setError("Analysis is unavailable right now. Your reflection is still here."); } finally { setLoading(false); } };
   const toggleAction = (action: string) => setCompleted(completed.includes(action) ? completed.filter((item) => item !== action) : [...completed, action]);
   const pinAffirmation = () => { if (!result) return; const affirmation = result.positive_affirmation ?? "I meet this moment with clarity, self-trust, and the courage to shape what comes next."; if (affirmations.some((item) => item.text === affirmation)) { setAffirmationNotice("Already glowing on your Affirmation Wall."); return; } setAffirmations([{ id: crypto.randomUUID(), text: affirmation, prompt: result.manifestation_prompt, title: result.vision_tile_suggestion?.title, imageQuery: result.vision_tile_suggestion?.image_query, createdAt: new Date().toISOString(), palette: affirmations.length % 4, favorite: false }, ...affirmations]); setAffirmationNotice("Pinned to your Affirmation Wall."); };
   const refreshAffirmation = async () => { if (!text.trim() || affirmationLoading) return; setAffirmationLoading(true); setAffirmationNotice(""); try { const next = await analyze({ data: { kind: "clarity", text: `${text}\nCreate a fresh affirmation variation for this moment.` } }); if ("reframe" in next && result) { const generated = next.positive_affirmation; const fresh = generated && generated !== result.positive_affirmation ? generated : affirmationVariations.find((item) => item !== result.positive_affirmation) ?? "I turn pressure into clear priorities and meet today with steady self-trust."; setResult({ ...result, positive_affirmation: fresh, affirmation_category: next.affirmation_category, vision_tile_suggestion: next.vision_tile_suggestion, manifestation_prompt: next.manifestation_prompt, source: next.source }); } } catch { setAffirmationNotice("A fresh affirmation is unavailable right now."); } finally { setAffirmationLoading(false); } };
@@ -102,6 +103,60 @@ function ClarityView({ reflections, setReflections, affirmations, setAffirmation
       <article className="insight-card wellness-card"><div className="card-top"><span className="icon-box rose"><Gauge /></span><span className="mini-label">WELLNESS PULSE</span></div><div className="stress-row"><div><span>Stress load</span><strong>{result.stress_level}<small>/10</small></strong></div><div className="meter"><i style={{ width: `${result.stress_level * 10}%` }} /></div></div><div className="tag-row">{result.emotional_tags.map((tag) => <span key={tag}>{tag}</span>)}</div><div className="grounding"><Waves className="size-4" /><div><b>2-minute reset</b><p>{result.grounding_micro_habit}</p></div></div></article>
     </div></div> : <div className="empty-insights"><BrainCircuit className="size-5" /><span>Your clarity map will unfold here after your first reflection.</span></div>}
   </section>;
+}
+
+function HistoryView({ reflections, setReflections }: { reflections: Reflection[]; setReflections: (value: Reflection[]) => void }) {
+  const generate = useServerFn(generateFollowUpPrompts);
+  const [search, setSearch] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [draft, setDraft] = useState("");
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const normalizedSearch = search.trim().toLowerCase();
+  const filtered = reflections.filter((reflection) => {
+    const day = reflection.createdAt.slice(0, 10);
+    if (fromDate && day < fromDate) return false;
+    if (toDate && day > toDate) return false;
+    if (!normalizedSearch) return true;
+    const searchable = [reflection.text, reflection.guidanceMessage, reflection.result?.detected_distortion, reflection.result?.reframe, reflection.result?.blind_spot_insight, ...(reflection.result?.action_items ?? []), ...(reflection.followUpPrompts ?? [])].filter(Boolean).join(" ").toLowerCase();
+    return searchable.includes(normalizedSearch);
+  });
+  const createPrompts = async (reflectionText: string, reflectionId?: string) => {
+    if (reflectionText.trim().length < 60) { setError("Add at least a couple of sentences so Sensus can shape meaningful follow-up questions."); return; }
+    const targetId = reflectionId ?? crypto.randomUUID();
+    setLoadingId(targetId); setError("");
+    try {
+      const response = await generate({ data: { reflection: reflectionText.trim() } });
+      if (!response.ok) { setError(response.error); return; }
+      if (reflectionId) {
+        setReflections(reflections.map((item) => item.id === reflectionId ? { ...item, followUpPrompts: response.prompts, gentleFocus: response.gentleFocus } : item));
+      } else {
+        setReflections([{ id: targetId, text: reflectionText.trim(), followUpPrompts: response.prompts, gentleFocus: response.gentleFocus, createdAt: new Date().toISOString() }, ...reflections].slice(0, 50));
+        setDraft("");
+      }
+    } catch { setError("Sensus could not shape follow-up prompts right now. Your reflection is still here."); }
+    finally { setLoadingId(null); }
+  };
+  const grouped = filtered.reduce<Record<string, Reflection[]>>((groups, reflection) => {
+    const day = reflection.createdAt.slice(0, 10);
+    groups[day] = [...(groups[day] ?? []), reflection];
+    return groups;
+  }, {});
+  return <section className="view-enter history-view">
+    <div className="vision-hero history-hero"><div><span className="eyebrow"><BookOpen className="size-3.5" /> REFLECTION HISTORY</span><h1>Notice what changes<br/><span>when you look back.</span></h1></div><p>Search the thoughts, patterns, guidance, and actions that have shaped your recent days.</p></div>
+    <article className="follow-up-composer"><div className="follow-up-copy"><span className="icon-box mint"><Sparkles className="size-4" /></span><div><span className="eyebrow">CONTINUE THE REFLECTION</span><h2>Let one insight open the next.</h2><p>Paste or write a completed reflection. Sensus will shape four personalized questions for your next journaling session.</p></div></div><div className="follow-up-entry"><textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Today I noticed…" aria-label="Completed reflection"/><div><span>{draft.trim() ? `${draft.trim().split(/\s+/).length} words` : "A couple of sentences is enough"}</span><Button onClick={() => createPrompts(draft)} disabled={draft.trim().length < 60 || loadingId !== null}>{loadingId && !reflections.some((item) => item.id === loadingId) ? <LoaderCircle className="size-4 animate-spin" /> : <Sparkles className="size-4" />}Generate follow-up prompts</Button></div></div></article>
+    {error && <p className="history-error" role="alert">{error}</p>}
+    <div className="history-toolbar"><label className="history-search"><Search className="size-4"/><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search reflections, patterns, or actions" aria-label="Search reflection history"/></label><div className="date-filters"><label><span>From</span><input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)}/></label><label><span>To</span><input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)}/></label>{(search || fromDate || toDate) && <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setFromDate(""); setToDate(""); }}><X className="size-3.5"/>Clear</Button>}</div></div>
+    <div className="history-summary"><span>{filtered.length} {filtered.length === 1 ? "reflection" : "reflections"}</span><span>{Object.keys(grouped).length} {Object.keys(grouped).length === 1 ? "day" : "days"}</span></div>
+    {filtered.length ? <div className="history-timeline">{Object.entries(grouped).map(([day, entries]) => <section className="history-day" key={day}><div className="history-date"><CalendarDays className="size-4"/><time dateTime={day}>{new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</time></div><div className="history-entries">{entries.map((reflection) => <ReflectionHistoryCard key={reflection.id} reflection={reflection} loading={loadingId === reflection.id} onGenerate={() => createPrompts(reflection.text, reflection.id)}/>)}</div></section>)}</div> : <div className="history-empty"><BookOpen className="size-5"/><b>{reflections.length ? "No reflections match this view." : "Your reflection history begins here."}</b><span>{reflections.length ? "Try a different phrase or widen the date range." : "Complete a Clarity Engine reflection or continue one above."}</span></div>}
+  </section>;
+}
+
+function ReflectionHistoryCard({ reflection, loading, onGenerate }: { reflection: Reflection; loading: boolean; onGenerate: () => void }) {
+  const [open, setOpen] = useState(false);
+  const result = reflection.result;
+  return <article className={reflection.guidanceMessage ? "history-card guidance-entry" : "history-card"}><button className="history-card-head" onClick={() => setOpen(!open)} aria-expanded={open}><div><span className="history-kind">{reflection.guidanceMessage ? "Guidance" : result ? result.detected_distortion : "Journal entry"}</span><h3>{reflection.text}</h3><time>{new Date(reflection.createdAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}</time></div><ChevronDown className={open ? "size-4 rotate-180" : "size-4"}/></button>{open && <div className="history-detail view-enter">{reflection.guidanceMessage && <div className="history-guidance"><Waves className="size-4"/><p>{reflection.guidanceMessage}</p></div>}{result && <><div className="history-insight"><span>Grounded perspective</span><blockquote>“{result.reframe}”</blockquote></div><div className="history-insight"><span>Blind-spot mirror</span><p>{result.blind_spot_insight}</p></div><div className="history-actions"><span>Action items</span>{result.action_items.map((action) => <p key={action}><Check className="size-3.5"/>{action}</p>)}</div></>}{reflection.gentleFocus && <p className="gentle-focus"><Sparkles className="size-3.5"/>{reflection.gentleFocus}</p>}{reflection.followUpPrompts?.length ? <div className="prompt-list"><span>Follow-up journal prompts</span>{reflection.followUpPrompts.map((prompt, index) => <div key={prompt}><b>{String(index + 1).padStart(2, "0")}</b><p>{prompt}</p></div>)}</div> : !reflection.guidanceMessage && <Button variant="glass" onClick={onGenerate} disabled={loading}>{loading ? <LoaderCircle className="size-4 animate-spin"/> : <Sparkles className="size-4"/>}{loading ? "Shaping prompts" : "Generate follow-up prompts"}</Button>}</div>}</article>;
 }
 
 function ListeningCard({ message, onPreset }: { message: string; onPreset: (text: string) => void }) { return <article className="listening-card view-enter"><span className="icon-box mint"><Waves className="size-4" /></span><div><span className="eyebrow">SENSUS IS LISTENING...</span><h2>A little more context will reveal the pattern.</h2><p>{message}</p><div className="preset-row">{presets.map((preset) => <button key={preset.label} onClick={() => onPreset(preset.text)}><span>{preset.icon}</span>{preset.label}</button>)}</div></div></article>; }
