@@ -550,13 +550,25 @@ button.bg-primary {
   content: "";
   position: absolute;
   inset: 0;
-  z-index: -1;
+  z-index: 0;
   border-radius: inherit;
   pointer-events: none;
   opacity: 0;
   background: radial-gradient(340px circle at var(--pointer-x) var(--pointer-y), color-mix(in oklab, var(--primary-bright) 11%, transparent), color-mix(in oklab, var(--cyan) 4%, transparent) 38%, transparent 72%);
   transition: opacity .45s ease;
 }
+.section-heading > *,
+.vision-hero > *,
+.voice-panel > *,
+.goal-builder > *,
+.insight-card > *,
+.vision-card > *,
+.affirmation-composer > *,
+.follow-up-composer > *,
+.history-card > *,
+.listening-card > *,
+.empty-insights > *,
+.history-empty > * { position: relative; z-index: 1; }
 [data-pointer-glow="true"]::after,
 [data-touch-glow="true"]::after { opacity: 1; }
 
