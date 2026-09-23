@@ -60,6 +60,7 @@ export const generateFollowUpPrompts = createServerFn({ method: "POST" })
     } catch (error) {
       if (NoObjectGeneratedError.isInstance(error)) {
         try {
+          if (!error.text) return { ok: false, error: "Sensus could not shape follow-up prompts right now. Your reflection is still saved." };
           const parsed = outputSchema.parse(JSON.parse(error.text));
           return { ok: true, prompts: parsed.prompts.slice(0, 4), gentleFocus: parsed.gentle_focus, source: "lovable-ai" };
         } catch { return { ok: false, error: "Sensus could not shape follow-up prompts right now. Your reflection is still saved." }; }
