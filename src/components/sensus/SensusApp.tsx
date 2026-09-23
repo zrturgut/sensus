@@ -19,6 +19,7 @@ import { recordWav } from "./record-wav";
 import { startAmbientAudio, type AmbientAudio } from "@/lib/ambient-audio";
 import { generateFollowUpPrompts } from "@/lib/follow-up.functions";
 import { generateExecutionRoadmap, type ExecutionRoadmap } from "@/lib/roadmap.functions";
+import { planWeekFromReflection, type WeekPlan } from "@/lib/agenda.functions";
 
 const presets = [
   { icon: "⚡", label: "Work overload & imposter loop", text: "I have three major deliverables due this week and I keep thinking everyone will realize I am not capable. I am over-preparing every detail, avoiding asking for help, and staying online late, but I still feel behind." },
@@ -129,14 +130,15 @@ export function SensusApp() {
     </div></header>
     <main className="main-shell">
       <nav className="mode-dock" aria-label="Sensus modes"><button className={mode === "clarity" ? "mode-option active" : "mode-option"} onClick={() => setMode("clarity")}><Mic className="size-4" /><span>Clarity Engine</span></button><button className={mode === "vision" ? "mode-option active" : "mode-option"} onClick={() => setMode("vision")}><Target className="size-4" /><span>Vision & Execution Architecture</span></button><button className={mode === "board" ? "mode-option active" : "mode-option"} onClick={() => setMode("board")}><LayoutDashboard className="size-4" /><span>Vision Board</span></button><button className={mode === "history" ? "mode-option active" : "mode-option"} onClick={() => setMode("history")}><BookOpen className="size-4" /><span>Reflection History</span></button></nav>
-      {mode === "clarity" ? <ClarityView reflections={reflections} setReflections={setReflections} affirmations={affirmations} setAffirmations={setAffirmations} /> : mode === "vision" ? <VisionView goals={goals} setGoals={setGoals} /> : mode === "board" ? <BoardView goals={goals} setGoals={setGoals} affirmations={affirmations} setAffirmations={setAffirmations} /> : <HistoryView reflections={reflections} setReflections={setReflections} />}
+      {mode === "clarity" ? <ClarityView reflections={reflections} setReflections={setReflections} affirmations={affirmations} setAffirmations={setAffirmations} goals={goals} setGoals={setGoals} /> : mode === "vision" ? <VisionView goals={goals} setGoals={setGoals} /> : mode === "board" ? <BoardView goals={goals} setGoals={setGoals} affirmations={affirmations} setAffirmations={setAffirmations} /> : <HistoryView reflections={reflections} setReflections={setReflections} />}
     </main>
     <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
   </div>;
 }
 
-function ClarityView({ reflections, setReflections, affirmations, setAffirmations }: { reflections: Reflection[]; setReflections: (v: Reflection[]) => void; affirmations: AffirmationTile[]; setAffirmations: (v: AffirmationTile[]) => void }) {
+function ClarityView({ reflections, setReflections, affirmations, setAffirmations, goals, setGoals }: { reflections: Reflection[]; setReflections: (v: Reflection[]) => void; affirmations: AffirmationTile[]; setAffirmations: (v: AffirmationTile[]) => void; goals: GoalItem[]; setGoals: (v: GoalItem[]) => void }) {
   const analyze = useServerFn(analyzeSensusInput);
+  const planWeek = useServerFn(planWeekFromReflection);
   const recorder = useRef<Awaited<ReturnType<typeof recordWav>> | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const [recording, setRecording] = useState(false); const [seconds, setSeconds] = useState(0); const [text, setText] = useState("");
@@ -144,6 +146,25 @@ function ClarityView({ reflections, setReflections, affirmations, setAffirmation
   const [guidance, setGuidance] = useState("");
   const [actionEdits, setActionEdits] = useStoredState<ActionEdits>("sensus-action-edits", { removed: [], custom: [], renamed: {} });
   const [affirmationLoading, setAffirmationLoading] = useState(false); const [audioState, setAudioState] = useState<"idle" | "loading" | "playing">("idle"); const [affirmationNotice, setAffirmationNotice] = useState("");
+  const [plan, setPlan] = useStoredState<WeekPlan | null>("sensus-week-plan", null);
+  const [planning, setPlanning] = useState(false); const [planError, setPlanError] = useState(""); const [programNotice, setProgramNotice] = useState("");
+  const buildWeek = async () => {
+    if (planning) return;
+    const reflection = text.trim();
+    if (reflection.length < 40) { setPlanError("Tell Sensus what you want to do next week, then plan again."); return; }
+    setPlanning(true); setPlanError(""); setProgramNotice("");
+    try {
+      const response = await planWeek({ data: { reflection, goals: goals.map((goal) => ({ id: goal.id, title: goal.title, category: goal.category })) } });
+      if (!response.ok) { setPlanError(response.error); return; }
+      setPlan(response.plan);
+      const fresh = response.plan.goals.filter((item) => !item.existingGoalId && !goals.some((goal) => goal.title.trim().toLowerCase() === item.title.trim().toLowerCase()));
+      if (fresh.length > 0) {
+        setGoals([...fresh.map((item) => ({ id: crypto.randomUUID(), title: item.title, category: item.category, date: "This week", status: "In momentum" as const })), ...goals]);
+        setProgramNotice(`${fresh.length} new intention${fresh.length > 1 ? "s" : ""} added to your programme in Vision & Execution Architecture.`);
+      } else setProgramNotice("Your agenda is linked to intentions you already track.");
+    } catch { setPlanError("Week planning is unavailable right now. Your reflection is still here."); }
+    finally { setPlanning(false); }
+  };
   const toggleRecording = async () => {
     setError("");
     if (!recording) { try { recorder.current = await recordWav(); setRecording(true); setSeconds(0); timer.current = setInterval(() => setSeconds((n) => n + 1), 1000); } catch { setError("Microphone access is needed to record a reflection."); } return; }
@@ -180,8 +201,38 @@ function ClarityView({ reflections, setReflections, affirmations, setAffirmation
       <ActionsCard items={actionItems} completed={completed} onToggle={toggleAction} onAdd={addAction} onRemove={removeAction} onRename={renameAction} />
       <article className="insight-card wellness-card"><div className="card-top"><span className="icon-box rose"><Gauge /></span><span className="mini-label">WELLNESS PULSE</span></div><div className="stress-row"><div><span>Stress load</span><strong>{result.stress_level}<small>/10</small></strong></div><div className="meter"><i style={{ width: `${result.stress_level * 10}%` }} /></div></div><div className="tag-row">{result.emotional_tags.map((tag) => <span key={tag}>{tag}</span>)}</div><div className="grounding"><Waves className="size-4" /><div><b>2-minute reset</b><p>{result.grounding_micro_habit}</p></div></div></article>
       <div className="safety-note"><ShieldCheck className="size-4" /><p><b>Responsible AI:</b> Non-clinical tool for cognitive productivity. Ephemeral local processing — no personal voice recordings stored on external servers.</p></div>
-    </div></div> : <div className="empty-insights"><BrainCircuit className="size-5" /><span>Your clarity map will unfold here after your first reflection.</span></div>}
+    </div><WeekAgendaCard plan={plan} planning={planning} error={planError} notice={programNotice} onPlan={buildWeek} onClear={() => { setPlan(null); setProgramNotice(""); setPlanError(""); }} /></div> : <div className="empty-insights"><BrainCircuit className="size-5" /><span>Your clarity map will unfold here after your first reflection.</span></div>}
   </section>;
+}
+
+function WeekAgendaCard({ plan, planning, error, notice, onPlan, onClear }: { plan: WeekPlan | null; planning: boolean; error: string; notice: string; onPlan: () => void; onClear: () => void }) {
+  const days = (plan?.blocks ?? []).reduce<{ label: string; blocks: WeekPlan["blocks"] }[]>((acc, block) => {
+    const current = acc.find((group) => group.label === block.dayLabel);
+    if (current) current.blocks.push(block); else acc.push({ label: block.dayLabel, blocks: [block] });
+    return acc;
+  }, []);
+  return <article className="agenda-card">
+    <div className="agenda-head">
+      <div><span className="mini-label"><CalendarDays className="size-3.5" /> NEXT WEEK AGENDA</span><h2>Your reflection, scheduled.</h2><p>Sensus reads what you want to do next week, adds it to your programme, then places realistic blocks on your agenda.</p></div>
+      <div className="agenda-head-actions">
+        <Button onClick={onPlan} disabled={planning}>{planning ? <LoaderCircle className="size-4 animate-spin" /> : <CalendarCheck className="size-4" />}{planning ? "Building your week" : plan ? "Replan my week" : "Plan my week"}</Button>
+        {plan && <Button variant="ghost" size="sm" onClick={onClear}><Trash2 className="size-3.5" />Clear agenda</Button>}
+      </div>
+    </div>
+    {error && <p className="error-text">{error}</p>}
+    {notice && <p className="agenda-notice" role="status"><Check className="size-3.5" />{notice}</p>}
+    {plan ? <>
+      <p className="agenda-summary">{plan.summary}</p>
+      {plan.goals.length > 0 && <div className="agenda-goals">{plan.goals.map((goal) => <span key={`${goal.title}-${goal.category}`}><Goal className="size-3" />{goal.title}<i>{goal.category}</i></span>)}</div>}
+      <div className="agenda-week">{days.map((day) => <div className="agenda-day" key={day.label}>
+        <span className="agenda-day-label">{day.label}</span>
+        <div className="agenda-blocks">{day.blocks.map((block) => <div className="agenda-block" key={block.id}>
+          <span className="agenda-time">{block.timeLabel}<i>{block.durationMinutes} min</i></span>
+          <div className="agenda-body"><b>{block.title}</b><span className="agenda-goal">{block.goalTitle}</span><p>{block.why}</p><CalendarActions title={block.title} compact when={block.startsAt} /></div>
+        </div>)}</div>
+      </div>)}</div>
+    </> : <p className="agenda-empty">No agenda yet. Mention what you want to do or change next week in your reflection, then let Sensus build the schedule.</p>}
+  </article>;
 }
 
 function HistoryView({ reflections, setReflections }: { reflections: Reflection[]; setReflections: (value: Reflection[]) => void }) {
@@ -353,7 +404,8 @@ function BoardView({ goals, setGoals, affirmations, setAffirmations }: { goals: 
         const body = await response.json().catch(() => null) as { url?: string; prompt?: string; error?: string } | null;
         if (!response.ok || !body?.url) throw new Error(body?.error ?? "Vision Art could not be created.");
         const imageUrl = body.url;
-        setGoals([{ ...goal, imageUrl, ...(body.prompt ? { imagePrompt: body.prompt } : {}) }, ...goals]); setArtNotice("Your new vision and artwork are ready.");
+        const base = goals.some((item) => item.id === goal.id) ? goals : [goal, ...goals];
+        setGoals(base.map((item) => item.id === goal.id ? { ...item, imageUrl, ...(body.prompt ? { imagePrompt: body.prompt } : {}) } : item)); setArtNotice("Your new vision and artwork are ready.");
       } catch (caught) { setArtNotice(caught instanceof Error ? caught.message : "Your vision was saved with curated artwork."); }
       finally { setGenerating(null); }
     }
