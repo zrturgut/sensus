@@ -84,7 +84,7 @@
 @keyframes focus-breathe { 0%,100% { transform: scale(.72); opacity: .55; } 50% { transform: scale(1.2); opacity: 1; } }
 @keyframes focus-drift { to { transform: scale(1.07); } }
 
-@media (max-width: 720px) { .board-controls { width: 100%; justify-content: flex-start; } .vision-footer button { width: 100%; } .dialog-actions > * { flex: 1; } }
+@media (max-width: 720px) { .board-controls { width: 100%; justify-content: flex-start; } .vision-footer button { width: 100%; } .dialog-actions { display: grid; grid-template-columns: 1fr; } .dialog-actions > * { width: 100%; white-space: normal; min-height: 44px; height: auto; line-height: 1.25; padding-block: .7rem; } .listening-card { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { .app-shell::before, .app-shell::after, .ambient-aurora::after, .focus-visualization > img, .focus-breath i, .audio-pulse { animation: none; } }
 
 * { box-sizing: border-box; border-color: var(--border); }
