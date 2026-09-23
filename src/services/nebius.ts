@@ -90,7 +90,7 @@ async function requestNebius(prompt: string, system = "You are a grounded cognit
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "meta-llama/Llama-3.3-70B-Instruct",
+      model: "zai-org/GLM-5.3-Flash",
       temperature: 0.4,
       response_format: { type: "json_object" },
       messages: [
