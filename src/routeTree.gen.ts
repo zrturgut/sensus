@@ -10,11 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiAffirmationSpeechRouteImport } from './routes/api/affirmation-speech'
 import { Route as ApiTranscribeRouteImport } from './routes/api/transcribe'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAffirmationSpeechRoute = ApiAffirmationSpeechRouteImport.update({
+  id: '/api/affirmation-speech',
+  path: '/api/affirmation-speech',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiTranscribeRoute = ApiTranscribeRouteImport.update({
@@ -25,27 +31,31 @@ const ApiTranscribeRoute = ApiTranscribeRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/affirmation-speech': typeof ApiAffirmationSpeechRoute
   '/api/transcribe': typeof ApiTranscribeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/affirmation-speech': typeof ApiAffirmationSpeechRoute
   '/api/transcribe': typeof ApiTranscribeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/affirmation-speech': typeof ApiAffirmationSpeechRoute
   '/api/transcribe': typeof ApiTranscribeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/transcribe'
+  fullPaths: '/' | '/api/affirmation-speech' | '/api/transcribe'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/transcribe'
-  id: '__root__' | '/' | '/api/transcribe'
+  to: '/' | '/api/affirmation-speech' | '/api/transcribe'
+  id: '__root__' | '/' | '/api/affirmation-speech' | '/api/transcribe'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiAffirmationSpeechRoute: typeof ApiAffirmationSpeechRoute
   ApiTranscribeRoute: typeof ApiTranscribeRoute
 }
 
@@ -56,6 +66,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/affirmation-speech': {
+      id: '/api/affirmation-speech'
+      path: '/api/affirmation-speech'
+      fullPath: '/api/affirmation-speech'
+      preLoaderRoute: typeof ApiAffirmationSpeechRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/transcribe': {
@@ -70,6 +87,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiAffirmationSpeechRoute: ApiAffirmationSpeechRoute,
   ApiTranscribeRoute: ApiTranscribeRoute,
 }
 export const routeTree = rootRouteImport
