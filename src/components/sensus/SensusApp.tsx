@@ -205,6 +205,36 @@ function ClarityView({ reflections, setReflections, affirmations, setAffirmation
   </section>;
 }
 
+function WeekAgendaCard({ plan, planning, error, notice, onPlan, onClear }: { plan: WeekPlan | null; planning: boolean; error: string; notice: string; onPlan: () => void; onClear: () => void }) {
+  const days = (plan?.blocks ?? []).reduce<{ label: string; blocks: WeekPlan["blocks"] }[]>((acc, block) => {
+    const current = acc.find((group) => group.label === block.dayLabel);
+    if (current) current.blocks.push(block); else acc.push({ label: block.dayLabel, blocks: [block] });
+    return acc;
+  }, []);
+  return <article className="agenda-card">
+    <div className="agenda-head">
+      <div><span className="mini-label"><CalendarDays className="size-3.5" /> NEXT WEEK AGENDA</span><h2>Your reflection, scheduled.</h2><p>Sensus reads what you want to do next week, adds it to your programme, then places realistic blocks on your agenda.</p></div>
+      <div className="agenda-head-actions">
+        <Button onClick={onPlan} disabled={planning}>{planning ? <LoaderCircle className="size-4 animate-spin" /> : <CalendarCheck className="size-4" />}{planning ? "Building your week" : plan ? "Replan my week" : "Plan my week"}</Button>
+        {plan && <Button variant="ghost" size="sm" onClick={onClear}><Trash2 className="size-3.5" />Clear agenda</Button>}
+      </div>
+    </div>
+    {error && <p className="error-text">{error}</p>}
+    {notice && <p className="agenda-notice" role="status"><Check className="size-3.5" />{notice}</p>}
+    {plan ? <>
+      <p className="agenda-summary">{plan.summary}</p>
+      {plan.goals.length > 0 && <div className="agenda-goals">{plan.goals.map((goal) => <span key={`${goal.title}-${goal.category}`}><Goal className="size-3" />{goal.title}<i>{goal.category}</i></span>)}</div>}
+      <div className="agenda-week">{days.map((day) => <div className="agenda-day" key={day.label}>
+        <span className="agenda-day-label">{day.label}</span>
+        <div className="agenda-blocks">{day.blocks.map((block) => <div className="agenda-block" key={block.id}>
+          <span className="agenda-time">{block.timeLabel}<i>{block.durationMinutes} min</i></span>
+          <div className="agenda-body"><b>{block.title}</b><span className="agenda-goal">{block.goalTitle}</span><p>{block.why}</p><CalendarActions title={block.title} compact when={block.startsAt} /></div>
+        </div>)}</div>
+      </div>)}</div>
+    </> : <p className="agenda-empty">No agenda yet. Mention what you want to do or change next week in your reflection, then let Sensus build the schedule.</p>}
+  </article>;
+}
+
 function HistoryView({ reflections, setReflections }: { reflections: Reflection[]; setReflections: (value: Reflection[]) => void }) {
   const generate = useServerFn(generateFollowUpPrompts);
   const reflectionRecorder = useRef<Awaited<ReturnType<typeof recordWav>> | null>(null);
