@@ -39,6 +39,18 @@ export type BenchmarkResult =
   | { ok: true; baseline: PlannerScore; agentic: PlannerScore; verdict: string; measuredAt: string }
   | { ok: false; error: string };
 
+const baselineSchema = z.object({
+  blocks: z.array(
+    z.object({
+      title: z.string(),
+      goal_title: z.string(),
+      day_offset: z.number(),
+      start_time: z.string(),
+      duration_minutes: z.number(),
+    }),
+  ),
+});
+
 const RECOVERY = /rest|recover|offline|walk|sleep|break|shutdown|unplug|pause|breathe|evening off|no work/i;
 
 /** Deterministic, code-side scoring so the comparison is measured rather than asserted. */
@@ -93,21 +105,9 @@ export const comparePlanners = createServerFn({ method: "POST" })
     try {
       const lovable = createResponsesGateway(key);
       const startedAt = Date.now();
-      const baseline = await generateText({
+      const baseline = generateText({
         model: lovable.responses(MODEL),
-        experimental_output: Output.object({
-          schema: z.object({
-            blocks: z.array(
-              z.object({
-                title: z.string(),
-                goal_title: z.string(),
-                day_offset: z.number(),
-                start_time: z.string(),
-                duration_minutes: z.number(),
-              }),
-            ),
-          }),
-        }),
+        output: Output.object({ schema: baselineSchema }),
         system:
           "You are a planning assistant. Read the reflection and return a plan of work blocks for the coming week as JSON only. You have no tools and no access to the person's tracked goals.",
         prompt: `Reflection:\n${data.reflection}`,
@@ -115,10 +115,11 @@ export const comparePlanners = createServerFn({ method: "POST" })
           openai: { forceReasoning: true, reasoningEffort: "low", reasoningSummary: "auto", store: false, include: ["reasoning.encrypted_content"] },
         },
       });
+      const baselineOutput = await baseline.output;
       const baselineLatency = Date.now() - startedAt;
       const midnight = new Date();
       midnight.setHours(0, 0, 0, 0);
-      const baselineBlocks: NormalizedBlock[] = (baseline.experimental_output?.blocks ?? []).slice(0, 14).map((block) => {
+      const baselineBlocks: NormalizedBlock[] = (baselineOutput?.blocks ?? []).slice(0, 14).map((block) => {
         const offset = Math.round(Number(block.day_offset));
         const [rawHour, rawMinute] = String(block.start_time).split(":");
         const hour = Number.parseInt(rawHour ?? "", 10);
