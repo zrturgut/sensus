@@ -607,3 +607,9 @@ button.bg-primary {
   .record-aura::after,
   .record-aura.active::after { animation: none; transform: none; }
 }
+
+/* Responsible AI safety note */
+.safety-note { grid-column: 1 / -1; display: flex; align-items: flex-start; gap: 10px; margin-top: 6px; padding: 14px 16px; border: 1px solid color-mix(in oklab, var(--border-bright) 70%, transparent); border-radius: 12px; color: var(--muted-foreground); background: color-mix(in oklab, var(--surface) 55%, transparent); }
+.safety-note svg { flex-shrink: 0; margin-top: 2px; color: var(--cyan); }
+.safety-note p { margin: 0; font-size: 11px; line-height: 1.6; }
+.safety-note b { color: var(--foreground); font-weight: 600; }
