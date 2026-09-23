@@ -50,7 +50,60 @@ function LogoMark() { return <div className="logo-mark"><Waves className="size-5
 function SourcePill({ source }: { source: "nebius" | "demo" }) { return <span className={source === "nebius" ? "source-pill source-live" : "source-pill"}>{source === "nebius" ? "Live reasoning" : "Demo reasoning"}</span>; }
 function formatTime(seconds: number) { return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`; }
 
+function useAtmosphericPointer() {
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const selector = ".section-heading, .vision-hero, .voice-panel, .goal-builder, .insight-card, .affirmation-capsule, .vision-card, .affirmation-composer, .follow-up-composer, .history-card, .settings-dialog, .listening-card, .empty-insights, .history-empty";
+    let frame = 0;
+    let pending: { target: HTMLElement; x: number; y: number } | null = null;
+    let touchTimer: ReturnType<typeof setTimeout> | null = null;
+    const paint = () => {
+      frame = 0;
+      if (!pending) return;
+      const { target, x, y } = pending;
+      const rect = target.getBoundingClientRect();
+      target.style.setProperty("--pointer-x", `${x - rect.left}px`);
+      target.style.setProperty("--pointer-y", `${y - rect.top}px`);
+      target.dataset.pointerGlow = "true";
+      pending = null;
+    };
+    const queue = (target: HTMLElement, x: number, y: number) => {
+      pending = { target, x, y };
+      if (!frame) frame = requestAnimationFrame(paint);
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      if (event.pointerType !== "mouse") return;
+      const target = (event.target as Element | null)?.closest<HTMLElement>(selector);
+      if (target) queue(target, event.clientX, event.clientY);
+    };
+    const onPointerOut = (event: PointerEvent) => {
+      const target = (event.target as Element | null)?.closest<HTMLElement>(selector);
+      if (target && !target.contains(event.relatedTarget as Node | null)) delete target.dataset.pointerGlow;
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.pointerType === "mouse") return;
+      const target = (event.target as Element | null)?.closest<HTMLElement>(selector);
+      if (!target) return;
+      queue(target, event.clientX, event.clientY);
+      target.dataset.touchGlow = "true";
+      if (touchTimer) clearTimeout(touchTimer);
+      touchTimer = setTimeout(() => delete target.dataset.touchGlow, 420);
+    };
+    document.addEventListener("pointermove", onPointerMove, { passive: true });
+    document.addEventListener("pointerout", onPointerOut, { passive: true });
+    document.addEventListener("pointerdown", onPointerDown, { passive: true });
+    return () => {
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerout", onPointerOut);
+      document.removeEventListener("pointerdown", onPointerDown);
+      if (frame) cancelAnimationFrame(frame);
+      if (touchTimer) clearTimeout(touchTimer);
+    };
+  }, []);
+}
+
 export function SensusApp() {
+  useAtmosphericPointer();
   const [mode, setMode] = useState<Mode>("clarity");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [goals, setGoals] = useStoredState<GoalItem[]>("sensus-goals", initialGoals);
