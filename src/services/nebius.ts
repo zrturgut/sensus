@@ -120,8 +120,8 @@ export const analyzeSensusInput = createServerFn({ method: "POST" })
         detected_distortion: z.string(), reframe: z.string(), blind_spot_insight: z.string(),
         action_items: z.array(z.string()).min(2).max(5), stress_level: z.number().min(1).max(10),
         emotional_tags: z.array(z.string()).min(1).max(5), grounding_micro_habit: z.string(),
-        positive_affirmation: z.string(), affirmation_category: z.string().max(40),
-        vision_tile_suggestion: z.object({ title: z.string().max(120), image_query: z.string().max(80) }),
+        positive_affirmation: z.string(), affirmation_category: z.string().transform((v) => v.slice(0, 40)),
+        vision_tile_suggestion: z.object({ title: z.string().transform((v) => v.slice(0, 120)), image_query: z.string().transform((v) => v.slice(0, 80)) }),
         manifestation_prompt: z.string(),
       });
       const words = data.text.trim().split(/\s+/).filter(Boolean).length;
