@@ -181,7 +181,7 @@ function DashboardView({ goals, plan, reflections, onNavigate }: { goals: GoalIt
       <div className="dash-meter" role="progressbar" aria-valuenow={completion} aria-valuemin={0} aria-valuemax={100} aria-label="Week completion"><i style={{ width: `${completion}%` }} /></div>
       <p className="dash-progress-sub">{total ? (completion === 100 ? "Every block complete. Take the win." : `${total - done} block${total - done === 1 ? "" : "s"} still open this week.`) : "Speak about your week and Sensus will fill this in."}</p>
       <div className="dash-progress-meta"><span>{goals.length} goal{goals.length === 1 ? "" : "s"} in play</span><span>{achieved} achieved</span><span>{reflections.length} reflection{reflections.length === 1 ? "" : "s"} logged</span>{latest && <span className={`capacity-chip band-${(latest.stress_band ?? "Strained").toLowerCase()}`}><Gauge className="size-3" />Capacity: {latest.stress_band ?? "Strained"}</span>}</div>
-      {latest && <p className="dash-progress-sub capacity-line">{PACE_COPY[latest.stress_band ?? "Strained"] ?? PACE_COPY.Strained}</p>}
+      {latest && <p className="dash-progress-sub capacity-line">{PACE_COPY[latest.stress_band ?? "Strained"] ?? PACE_COPY["Strained"]}</p>}
     </article>
 
     <div className="dash-grid">
@@ -256,7 +256,16 @@ function ProgressView({ goals, plan, reflections, onNavigate }: { goals: GoalIte
       <div className="dash-progress-top"><div><span className="mini-label"><Gauge className="size-3.5" /> OVERALL MOMENTUM</span><h2>{goals.length ? `${overall}% average completion` : "No goals yet"}</h2></div>{goals.length > 0 && <strong className="dash-progress-count">{timeLabel}<span className="dash-progress-unit"> invested</span></strong>}</div>
       <div className="dash-meter" role="progressbar" aria-valuenow={overall} aria-valuemin={0} aria-valuemax={100} aria-label="Overall goal completion"><i style={{ width: `${overall}%` }} /></div>
       <p className="dash-progress-sub">{withWork.length ? `${withWork.length} of ${goals.length} goals have scheduled work or milestones behind them.` : "Schedule your week or build a roadmap and progress will start counting."}</p>
+      <div className="dash-progress-meta"><span>{reflections.length} reflection{reflections.length === 1 ? "" : "s"} logged</span>{latest && <span className={`capacity-chip band-${band.toLowerCase()}`}><Gauge className="size-3" />Capacity: {band}</span>}</div>
     </article>
+
+    {latest ? <article className="dash-card dash-signal">
+      <div className="dash-card-head"><div><span className="mini-label"><BrainCircuit className="size-3.5" /> CAPACITY & LATEST SIGNAL</span><h3>{latest.detected_distortion} · {band}</h3></div><Button variant="ghost" size="sm" onClick={() => onNavigate("reflect")}>Reflect again<ArrowRight className="size-3.5" /></Button></div>
+      <blockquote>“{latest.reframe}”</blockquote>
+      <p className="dash-progress-sub capacity-line">{PACE_COPY[band] ?? PACE_COPY["Strained"]}</p>
+      {signals.length > 1 && <div className="capacity-trend">{[...signals].reverse().map((item, index) => <span key={item.id} className={`capacity-chip band-${(item.result?.stress_band ?? "Strained").toLowerCase()}`}>{index === signals.length - 1 ? "Now" : item.result?.stress_band ?? "Strained"}</span>)}</div>}
+    </article>
+      : <div className="dash-empty"><BrainCircuit className="size-5" /><span>Reflect once and your capacity band plus reframe will appear here automatically.</span><Button variant="glass" size="sm" onClick={() => onNavigate("reflect")}>Start reflecting<ArrowRight className="size-3.5" /></Button></div>}
 
     {stats.length ? <div className="progress-goal-list">{stats.map(({ goal, linked, doneBlocks, minutesDone, minutesTotal, milestones, milestonesHit, completion }) => {
       const h = Math.floor(minutesDone / 60);
