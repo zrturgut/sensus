@@ -45,15 +45,9 @@ export type ExecutionRoadmap = {
 
 export type RoadmapResult = { ok: true; roadmap: ExecutionRoadmap } | { ok: false; error: string };
 
-function safeGatewayMessage(error: unknown) {
-  const value = error as { statusCode?: number };
-  if (value.statusCode === 402) return "AI planning is paused because AI credits are unavailable. Add credits in workspace billing to generate roadmaps.";
-  if (value.statusCode === 401) return "AI planning is not configured yet for this project.";
-  if (value.statusCode === 403) return "AI planning is currently unavailable for this workspace.";
-  if (value.statusCode === 429) return "AI planning is resting after high demand. Please try again in a moment.";
-  if (value.statusCode && value.statusCode >= 500) return "AI planning is temporarily unavailable. Please try again shortly.";
-  return "Sensus could not build the roadmap right now. Please try again.";
-}
+import { safeGatewayMessage as gatewayMessage } from "./gateway-errors";
+
+const safeGatewayMessage = (error: unknown) => gatewayMessage(error, "Roadmap planning");
 
 function shape(raw: z.infer<typeof outputSchema>): ExecutionRoadmap {
   const now = Date.now();
