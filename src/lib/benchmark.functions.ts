@@ -59,8 +59,13 @@ function scorePlan(label: string, blocks: NormalizedBlock[], goals: { title: str
   const titles = goals.map((goal) => goal.title.toLowerCase());
   const words = (value: string) => value.toLowerCase().split(/\W+/).filter((word) => word.length > 3);
   const linked = blocks.filter((block) => {
-    const target = block.goalTitle.toLowerCase();
-    return titles.some((title) => title.includes(target) || target.includes(title) || words(title).some((word) => target.includes(word)));
+    const target = block.goalTitle.toLowerCase().trim();
+    if (!target) return false;
+    return titles.some((title) => {
+      if (title === target) return true;
+      const overlap = words(title).filter((word) => words(target).includes(word));
+      return overlap.length >= 2;
+    });
   }).length;
   const schedulable = blocks.filter(
     (block) => block.hour >= 5 && block.hour <= 22 && block.duration >= 15 && block.duration <= 120 && block.dayKey !== "",
