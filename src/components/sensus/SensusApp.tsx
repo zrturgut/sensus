@@ -137,7 +137,7 @@ function BoardView({ goals, setGoals, affirmations, setAffirmations }: { goals: 
       const response = await fetch("/api/generate-vision-art", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subject: goal.title, category: goal.category }) });
       const body = await response.json().catch(() => null) as { url?: string; prompt?: string; error?: string } | null;
       if (!response.ok || !body?.url) throw new Error(body?.error ?? "Vision Art could not be created.");
-      setGoals(goals.map((item) => item.id === goal.id ? { ...item, imageUrl: body.url, imagePrompt: body.prompt } : item));
+      setGoals(goals.map((item) => item.id === goal.id ? { ...item, imageUrl: body.url, ...(body.prompt ? { imagePrompt: body.prompt } : {}) } : item));
       setArtNotice("Your new Vision Art is ready.");
     } catch (caught) { setArtNotice(caught instanceof Error ? caught.message : "Vision Art could not be created. Your curated image remains in place."); }
     finally { setGenerating(null); }
@@ -152,7 +152,7 @@ function BoardView({ goals, setGoals, affirmations, setAffirmations }: { goals: 
         const response = await fetch("/api/generate-vision-art", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subject: goal.title, category: goal.category }) });
         const body = await response.json().catch(() => null) as { url?: string; prompt?: string; error?: string } | null;
         if (!response.ok || !body?.url) throw new Error(body?.error ?? "Vision Art could not be created.");
-        setGoals([{ ...goal, imageUrl: body.url, imagePrompt: body.prompt }, ...goals]); setArtNotice("Your new vision and artwork are ready.");
+        setGoals([{ ...goal, imageUrl: body.url, ...(body.prompt ? { imagePrompt: body.prompt } : {}) }, ...goals]); setArtNotice("Your new vision and artwork are ready.");
       } catch (caught) { setArtNotice(caught instanceof Error ? caught.message : "Your vision was saved with curated artwork."); }
       finally { setGenerating(null); }
     }
