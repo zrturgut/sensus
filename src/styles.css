@@ -262,7 +262,8 @@ button { cursor: pointer; }
 .reflection-dictation textarea { display: block; padding-right: 64px; }
 .reflection-dictation .reflection-mic { position: absolute; right: 13px; bottom: 13px; z-index: 2; width: 38px; height: 38px; border-color: color-mix(in oklab, var(--cyan) 30%, transparent); color: var(--cyan); background: color-mix(in oklab, var(--background) 72%, transparent); box-shadow: 0 8px 24px color-mix(in oklab, var(--cyan) 10%, transparent); backdrop-filter: blur(16px); }
 .reflection-dictation .reflection-mic:hover { border-color: color-mix(in oklab, var(--cyan) 58%, transparent); color: var(--foreground); background: color-mix(in oklab, var(--cyan) 12%, var(--surface)); transform: translateY(-1px); }
-.reflection-dictation .reflection-mic.recording { color: var(--primary-foreground); background: linear-gradient(145deg, var(--cyan), var(--primary-bright), var(--primary)); box-shadow: 0 0 0 6px color-mix(in oklab, var(--cyan) 8%, transparent), 0 0 28px color-mix(in oklab, var(--cyan) 24%, transparent); animation: dictation-pulse 1.8s ease-in-out infinite; }
+.reflection-dictation .reflection-mic.recording { color: var(--primary-foreground); background: linear-gradient(145deg, var(--cyan), var(--primary-bright), var(--primary)); box-shadow: 0 0 0 6px color-mix(in oklab, var(--cyan) 8%, transparent), 0 0 28px color-mix(in oklab, var(--cyan) 24%, transparent); }
+.reflection-dictation .reflection-mic.recording::after { content: ""; position: absolute; inset: -7px; z-index: -1; border: 1px solid color-mix(in oklab, var(--cyan) 38%, transparent); border-radius: 999px; pointer-events: none; animation: dictation-pulse 1.8s ease-in-out infinite; }
 .follow-up-entry>div { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 12px; }
 .follow-up-entry>.reflection-dictation { display: block; margin-top: 0; }
 .follow-up-entry>div>span { color: var(--muted-foreground); font-size: 10px; }
