@@ -53,7 +53,7 @@ export function SensusApp() {
   const [goals, setGoals] = useStoredState<GoalItem[]>("sensus-goals", initialGoals);
   const [reflections, setReflections] = useStoredState<Reflection[]>("sensus-reflections", []);
   const [affirmations, setAffirmations] = useStoredState<AffirmationTile[]>("sensus-affirmations", []);
-  return <div className="min-h-screen bg-background text-foreground"><div className="ambient-grid" aria-hidden="true" />
+  return <div className="min-h-screen bg-background text-foreground"><div className="ambient-aurora" aria-hidden="true"><i className="aurora-sage" /><i className="aurora-lavender" /><i className="aurora-sky" /></div>
     <header className="app-header"><div className="header-inner">
       <div className="brand"><LogoMark /><div><div className="brand-name">SENSUS</div><p>Voice-first clarity, grounded execution & vision</p></div></div>
       <div className="header-actions"><div className="status-cluster"><span className="status-badge"><i className="status-dot cyan" />Speech <b>ElevenLabs Scribe</b></span><span className="status-badge"><i className="status-dot mint" />Reasoning <b>Nebius Token Factory</b></span></div><Button variant="icon" size="icon" aria-label="Open settings" onClick={() => setSettingsOpen(true)}><Settings className="size-4" /></Button></div>
