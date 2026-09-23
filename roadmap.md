@@ -44,3 +44,4 @@
 - [x] Measured advantage panel: live agentic vs single-shot baseline, scored deterministically in code
 - [x] Momentum strip: reflection streak, reflections logged, week completion, capacity trend
 - [x] Toast feedback for planning, scheduling, comparison, and copy actions
+- [x] Removed the per-goal Progress tab (per-goal stats stay visible on Dashboard/My Week)
