@@ -748,3 +748,27 @@ button.bg-primary {
 .reflect-log { margin-top: 36px; }
 .trend-line { display: inline-flex; align-items: center; gap: 6px; }
 @media (max-width: 680px) { .schedule-cta { flex-direction: column; align-items: stretch; } .schedule-cta button { width: 100%; } .cold-open-actions button { width: 100%; } }
+
+/* --- Momentum signals & measured advantage --- */
+.momentum-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 22px; }
+.momentum-strip > div { display: grid; gap: 4px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 14px; background: color-mix(in oklab, var(--background) 45%, transparent); }
+.momentum-strip span { color: var(--muted-foreground); font-size: 10px; letter-spacing: .07em; text-transform: uppercase; }
+.momentum-strip b { font-size: 19px; font-weight: 700; letter-spacing: -0.01em; }
+.momentum-strip i { color: var(--muted-foreground); font-size: 11px; font-style: normal; }
+.evidence-card { margin-top: 26px; padding: 26px; border: 1px solid var(--border-bright); border-radius: 20px; background: color-mix(in oklab, var(--background) 52%, transparent); }
+.evidence-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.evidence-head h2 { margin: 8px 0 8px; font-size: 22px; letter-spacing: -0.02em; }
+.evidence-head p { max-width: 62ch; color: var(--muted-foreground); font-size: 12.5px; line-height: 1.7; }
+.evidence-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 22px; }
+.evidence-column { padding: 18px; border: 1px solid var(--border); border-radius: 16px; background: color-mix(in oklab, var(--background) 40%, transparent); }
+.evidence-column.winner { border-color: color-mix(in oklab, var(--primary) 55%, var(--border)); box-shadow: 0 0 0 1px color-mix(in oklab, var(--primary) 22%, transparent) inset; }
+.evidence-label { color: var(--muted-foreground); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.evidence-column strong { display: block; margin: 8px 0 14px; font-size: 34px; font-weight: 700; letter-spacing: -0.03em; }
+.evidence-column strong i { margin-left: 4px; color: var(--muted-foreground); font-size: 13px; font-style: normal; font-weight: 500; }
+.evidence-column ul { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.evidence-column li { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 12.5px; }
+.evidence-column li span { color: var(--muted-foreground); }
+.evidence-verdict { display: flex; align-items: flex-start; gap: 8px; margin: 18px 0 0; padding: 14px 16px; border: 1px solid var(--border); border-radius: 13px; font-size: 13px; line-height: 1.7; }
+.evidence-verdict svg { margin-top: 3px; flex: none; }
+.evidence-stamp { margin: 10px 0 0; color: var(--muted-foreground); font-size: 11px; }
+@media (max-width: 680px) { .evidence-head button { width: 100%; } .evidence-card { padding: 20px; } }
