@@ -133,6 +133,7 @@ export const analyzeSensusInput = createServerFn({ method: "POST" })
       const insufficientParsed = insufficient.safeParse(raw);
       if (insufficientParsed.success) return { ...insufficientParsed.data, source: "nebius" as const };
       const parsed = sufficient.safeParse(raw);
+      if (!parsed.success && raw) console.error("Nebius clarity schema mismatch:", JSON.stringify(parsed.error.issues.slice(0, 6)));
       return parsed.success ? { ...parsed.data, source: "nebius" as const } : clarityFallback(data.text);
     }
     const schema = z.object({ dream: z.string(), internal_friction: z.string(), if_then_plan: z.string() });
