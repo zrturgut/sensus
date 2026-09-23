@@ -10,6 +10,11 @@ export type ClarityResult = {
   emotional_tags: string[];
   grounding_micro_habit: string;
   positive_affirmation: string;
+  affirmation_category: string;
+  vision_tile_suggestion: {
+    title: string;
+    image_query: string;
+  };
   manifestation_prompt: string;
   source: "nebius" | "demo";
 };
@@ -48,6 +53,12 @@ function clarityFallback(text: string): ClarityResult {
       : overload
         ? "I trust my capability, share my work with courage, and create progress without proving my worth."
         : "I meet this moment with clarity, self-trust, and the courage to shape what comes next.",
+    affirmation_category: burnout ? "Inner Peace" : overload ? "Confidence" : "Resilience",
+    vision_tile_suggestion: burnout
+      ? { title: "Begin each day feeling restored", image_query: "morning mist mountain" }
+      : overload
+        ? { title: "Lead with calm, visible confidence", image_query: "minimal desk plant" }
+        : { title: "Move through life with grounded clarity", image_query: "calm ocean" },
     manifestation_prompt: burnout
       ? "See yourself ending today restored, proud of one meaningful promise kept to yourself."
       : "Picture tonight: the essential work is complete, your shoulders are relaxed, and your confidence feels earned.",
@@ -99,9 +110,11 @@ export const analyzeSensusInput = createServerFn({ method: "POST" })
         detected_distortion: z.string(), reframe: z.string(), blind_spot_insight: z.string(),
         action_items: z.array(z.string()).min(2).max(5), stress_level: z.number().min(1).max(10),
         emotional_tags: z.array(z.string()).min(1).max(5), grounding_micro_habit: z.string(),
-        positive_affirmation: z.string(), manifestation_prompt: z.string(),
+        positive_affirmation: z.string(), affirmation_category: z.string().max(40),
+        vision_tile_suggestion: z.object({ title: z.string().max(120), image_query: z.string().max(80) }),
+        manifestation_prompt: z.string(),
       });
-      const raw = await requestNebius(`Analyze this reflection: ${data.text}\nReturn keys: detected_distortion, reframe, blind_spot_insight, action_items, stress_level, emotional_tags, grounding_micro_habit, positive_affirmation, manifestation_prompt. positive_affirmation must be a bold, present-tense, uplifting mantra derived directly from transforming the user's current challenge into a self-affirming strength. manifestation_prompt must be a short, vivid sentence visualizing today's best possible outcome.`);
+      const raw = await requestNebius(`Analyze this reflection: ${data.text}\nReturn one JSON object with keys: detected_distortion, reframe, blind_spot_insight, action_items, stress_level, emotional_tags, grounding_micro_habit, positive_affirmation, affirmation_category, vision_tile_suggestion, manifestation_prompt. positive_affirmation must be a personalized, present-tense, uplifting mantra derived directly from converting the user's specific worry into an empowering strength. affirmation_category must be a short tag such as Inner Peace, Confidence, Focus, or Resilience. vision_tile_suggestion must be an object with a short aspirational title derived from this session and a peaceful image_query such as morning mist mountain, minimal desk plant, or calm ocean. manifestation_prompt must be a short, vivid sentence visualizing today's best possible outcome.`);
       const parsed = schema.safeParse(raw);
       return parsed.success ? { ...parsed.data, source: "nebius" as const } : clarityFallback(data.text);
     }

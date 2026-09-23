@@ -6,3 +6,6 @@
 - [x] Verify desktop and mobile flows
 - [x] Apply serene organic sanctuary visual system
 - [x] Verify clarity, vision, and recording states across desktop and mobile
+- [x] Extend affirmations with categories and suggested vision tiles
+- [x] Add persistent intention favorites and image-backed affirmation wall
+- [x] Verify affirmation generation, pinning, audio fallback, and persistence
