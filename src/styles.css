@@ -258,7 +258,13 @@ button { cursor: pointer; }
 .follow-up-copy p { margin: 0; color: var(--muted-foreground); font-size: 12px; line-height: 1.75; }
 .follow-up-entry textarea { width: 100%; min-height: 142px; resize: vertical; padding: 17px; border: 1px solid var(--border); border-radius: 15px; outline: 0; color: var(--foreground); background: color-mix(in oklab, var(--background) 55%, transparent); line-height: 1.7; }
 .follow-up-entry textarea:focus { border-color: color-mix(in oklab, var(--primary) 45%, transparent); box-shadow: 0 0 0 4px color-mix(in oklab, var(--primary) 7%, transparent); }
+.reflection-dictation { position: relative; }
+.reflection-dictation textarea { display: block; padding-right: 64px; }
+.reflection-dictation .reflection-mic { position: absolute; right: 13px; bottom: 13px; z-index: 2; width: 38px; height: 38px; border-color: color-mix(in oklab, var(--cyan) 30%, transparent); color: var(--cyan); background: color-mix(in oklab, var(--background) 72%, transparent); box-shadow: 0 8px 24px color-mix(in oklab, var(--cyan) 10%, transparent); backdrop-filter: blur(16px); }
+.reflection-dictation .reflection-mic:hover { border-color: color-mix(in oklab, var(--cyan) 58%, transparent); color: var(--foreground); background: color-mix(in oklab, var(--cyan) 12%, var(--surface)); transform: translateY(-1px); }
+.reflection-dictation .reflection-mic.recording { color: var(--primary-foreground); background: linear-gradient(145deg, var(--cyan), var(--primary-bright), var(--primary)); box-shadow: 0 0 0 6px color-mix(in oklab, var(--cyan) 8%, transparent), 0 0 28px color-mix(in oklab, var(--cyan) 24%, transparent); animation: dictation-pulse 1.8s ease-in-out infinite; }
 .follow-up-entry>div { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 12px; }
+.follow-up-entry>.reflection-dictation { display: block; margin-top: 0; }
 .follow-up-entry>div>span { color: var(--muted-foreground); font-size: 10px; }
 .history-error { margin: 14px 0 0; padding: 12px 15px; border: 1px solid color-mix(in oklab, var(--rose) 24%, transparent); border-radius: 12px; color: color-mix(in oklab, var(--rose) 80%, var(--foreground)); background: color-mix(in oklab, var(--rose) 6%, transparent); font-size: 11px; }
 .history-toolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-top: 54px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }
@@ -579,6 +585,9 @@ button.bg-primary {
 @keyframes recording-pulse {
   0%, 100% { transform: scale(.94); opacity: .72; box-shadow: 0 0 0 14px color-mix(in oklab, var(--cyan) 8%, transparent), 0 0 52px color-mix(in oklab, var(--primary-bright) 20%, transparent); }
   50% { transform: scale(1.13); opacity: 1; box-shadow: 0 0 0 28px color-mix(in oklab, var(--primary) 10%, transparent), 0 0 76px color-mix(in oklab, var(--cyan) 30%, transparent); }
+}
+@keyframes dictation-pulse {
+  50% { transform: scale(.94); box-shadow: 0 0 0 10px color-mix(in oklab, var(--cyan) 10%, transparent), 0 0 34px color-mix(in oklab, var(--primary) 26%, transparent); }
 }
 
 @media (max-width: 680px) {
