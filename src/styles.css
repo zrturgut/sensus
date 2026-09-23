@@ -818,3 +818,16 @@ button.bg-primary {
 .evidence-verdict svg { margin-top: 3px; flex: none; }
 .evidence-stamp { margin: 10px 0 0; color: var(--muted-foreground); font-size: 11px; }
 @media (max-width: 680px) { .evidence-head button { width: 100%; } .evidence-card { padding: 20px; } }
+
+/* Capacity signal surfaced on Dashboard + Progress */
+.capacity-chip {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  padding: 0.2rem 0.55rem; border-radius: 999px;
+  border: 1px solid hsl(var(--border) / 0.8);
+  background: hsl(var(--card) / 0.6); font-weight: 600;
+}
+.capacity-chip.band-steady { color: hsl(188 68% 70%); border-color: hsl(188 68% 60% / 0.45); background: hsl(188 68% 45% / 0.12); }
+.capacity-chip.band-strained { color: hsl(255 85% 80%); border-color: hsl(255 85% 72% / 0.45); background: hsl(255 85% 62% / 0.14); }
+.capacity-chip.band-depleted { color: hsl(28 90% 72%); border-color: hsl(28 90% 66% / 0.45); background: hsl(28 90% 58% / 0.14); }
+.capacity-line { margin-top: 0.45rem; }
+.capacity-trend { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.75rem; font-size: 0.75rem; }

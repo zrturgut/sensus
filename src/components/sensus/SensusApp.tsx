@@ -311,7 +311,7 @@ function ReflectView({ reflections, setReflections, goals, setGoals, setPlan, on
     try {
       const next = await analyze({ data: { text } });
       const entry = { id: crypto.randomUUID(), text, createdAt: new Date().toISOString() };
-      if (next.is_sufficient) { setResult(next); setReflections([{ ...entry, result: next }, ...reflections].slice(0, 50)); }
+      if (next.is_sufficient) { setResult(next); setReflections([{ ...entry, result: next }, ...reflections].slice(0, 50)); toast.success(`Capacity: ${next.stress_band}. Dashboard and Progress updated.`); }
       else { setResult(null); setGuidance(next.guidance_message); setReflections([{ ...entry, guidanceMessage: next.guidance_message }, ...reflections].slice(0, 50)); }
     } catch { setError("Analysis is unavailable right now. Your reflection is still here."); }
     finally { setLoading(false); }
