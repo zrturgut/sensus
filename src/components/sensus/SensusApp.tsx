@@ -184,7 +184,7 @@ function buildDemoWeekPlan(goals: GoalItem[]): WeekPlan {
     startsAt: item.at.toISOString(),
     dayLabel: dayLabel(item.at),
     timeLabel: timeLabel(item.at),
-    done: item.done,
+    done: item.done ?? false,
   }));
   return {
     summary: "A realistic week: two deep-work pushes on v1, partner outreach and demos, with recovery and a hard stop to protect the 55-hour ceiling.",
