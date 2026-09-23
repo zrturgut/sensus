@@ -136,7 +136,7 @@ export function SensusApp() {
         <button className={mode === "execute" ? "mode-option active" : "mode-option"} onClick={() => setMode("execute")}><Target className="size-4" /><span>Execution</span></button>
       </nav>
       {mode === "home"
-        ? <DashboardView goals={goals} plan={plan} reflections={reflections} onNavigate={setMode} />
+        ? <DashboardView goals={goals} plan={plan} reflections={reflections} onNavigate={setMode} onLoadDemo={() => { setPlan(buildDemoWeekPlan(goals)); toast.success("Demo week loaded — see My Week for the full agenda."); }} />
         : mode === "reflect"
         ? <ReflectView reflections={reflections} setReflections={setReflections} goals={goals} setGoals={setGoals} setPlan={setPlan} onScheduled={() => setMode("week")} />
           : mode === "week"
@@ -199,7 +199,7 @@ function buildDemoWeekPlan(goals: GoalItem[]): WeekPlan {
   };
 }
 
-function DashboardView({ goals, plan, reflections, onNavigate }: { goals: GoalItem[]; plan: WeekPlan | null; reflections: Reflection[]; onNavigate: (mode: Mode) => void }) {
+function DashboardView({ goals, plan, reflections, onNavigate, onLoadDemo }: { goals: GoalItem[]; plan: WeekPlan | null; reflections: Reflection[]; onNavigate: (mode: Mode) => void; onLoadDemo: () => void }) {
   const total = plan?.blocks.length ?? 0;
   const done = plan?.blocks.filter((block) => block.done).length ?? 0;
   const completion = total ? Math.round((done / total) * 100) : 0;
@@ -234,7 +234,7 @@ function DashboardView({ goals, plan, reflections, onNavigate }: { goals: GoalIt
           <span className="dash-block-time">{block.dayLabel}<i>{block.timeLabel}</i></span>
           <div><b>{block.title}</b><span>{block.goalTitle} · {block.durationMinutes} min</span></div>
         </li>)}</ul>
-          : <div className="dash-empty"><CalendarDays className="size-5" /><span>{plan ? "Every block is done. Clear space ahead." : "Tell Sensus what matters next week to build the schedule."}</span></div>}
+          : <div className="dash-empty"><CalendarDays className="size-5" /><span>{plan ? "Every block is done. Clear space ahead." : "Tell Sensus what matters next week to build the schedule."}</span>{!plan && <Button variant="glass" size="sm" onClick={onLoadDemo}><Sparkles className="size-3.5" />Load a demo week</Button>}</div>}
       </article>
 
       <article className="dash-card">
@@ -448,7 +448,7 @@ function WeekView({ goals, setGoals, plan, setPlan, reflections, onSpeak }: { go
 
 
     {!plan && !composing
-      ? <div className="week-cold-open"><CalendarDays className="size-6" /><b>Your week is open.</b><span>Tell Sensus what matters next week and it will build the schedule.</span><div className="cold-open-actions"><Button size="lg" onClick={onSpeak}><Mic className="size-4" />Speak about your week</Button><Button variant="glass" size="lg" onClick={() => setComposing(true)}><Pencil className="size-4" />Type it instead</Button></div></div>
+      ? <div className="week-cold-open"><CalendarDays className="size-6" /><b>Your week is open.</b><span>Tell Sensus what matters next week and it will build the schedule.</span><div className="cold-open-actions"><Button size="lg" onClick={onSpeak}><Mic className="size-4" />Speak about your week</Button><Button variant="glass" size="lg" onClick={() => setComposing(true)}><Pencil className="size-4" />Type it instead</Button><Button variant="ghost" size="lg" onClick={() => { setPlan(buildDemoWeekPlan(goals)); toast.success("Demo week loaded"); }}><Sparkles className="size-4" />Load a demo week</Button></div></div>
       : <div className="agenda-composer">
         <textarea value={brief} onChange={(event) => setBrief(event.target.value)} placeholder="Next week I want to finish… I have time on… I also need space for…" aria-label="What do you want to do next week?" />
         <Button variant="icon" size="icon" className={dictation.recording ? "agenda-mic recording" : "agenda-mic"} aria-label={dictation.recording ? "Stop planning by voice" : "Plan by voice"} onClick={dictation.toggle}>{dictation.recording ? <Square className="size-4 fill-current" /> : dictation.transcribing ? <LoaderCircle className="size-4 animate-spin" /> : <Mic className="size-4" />}</Button>
