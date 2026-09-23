@@ -153,6 +153,52 @@ const PACE_COPY: Record<string, string> = {
   Depleted: "Capacity is depleted — cut the week back to one block a day and keep the reset.",
 };
 
+/** Demo agenda for pitches: realistic blocks across the next four days, linked to the tracked goals. */
+function buildDemoWeekPlan(goals: GoalItem[]): WeekPlan {
+  const matchGoal = (title: string) => goals.find((goal) => goal.title.trim().toLowerCase() === title.trim().toLowerCase())?.id ?? null;
+  const shipGoal = "Ship v1 to 10 design partners";
+  const hoursGoal = "Keep my week under 55 hours";
+  const mk = (dayOffset: number, hour: number, minute: number) => {
+    const date = new Date();
+    date.setDate(date.getDate() + dayOffset);
+    date.setHours(hour, minute, 0, 0);
+    return date;
+  };
+  const dayLabel = (date: Date) => date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  const timeLabel = (date: Date) => date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  const spec: Array<{ title: string; goalTitle: string; why: string; durationMinutes: number; at: Date; done?: boolean }> = [
+    { title: "Deep work: finalize the v1 onboarding flow", goalTitle: shipGoal, why: "The highest-leverage block — onboarding is what design partners judge first.", durationMinutes: 90, at: mk(0, 9, 0), done: true },
+    { title: "Founder reset: walk + two-minute breathing", goalTitle: hoursGoal, why: "Protects capacity before the afternoon push; small recovery keeps the week sustainable.", durationMinutes: 20, at: mk(0, 13, 0), done: true },
+    { title: "Outreach: message 4 design partners", goalTitle: shipGoal, why: "Pipeline work compounds — four quality touches beat a launch-day scramble.", durationMinutes: 60, at: mk(1, 9, 30) },
+    { title: "Review activation metrics and tighten the demo script", goalTitle: shipGoal, why: "Grounds the next demo calls in real numbers, not vibes.", durationMinutes: 45, at: mk(1, 16, 0) },
+    { title: "Demo calls with 2 design partners", goalTitle: shipGoal, why: "Direct feedback from the exact people v1 is for.", durationMinutes: 60, at: mk(2, 8, 30) },
+    { title: "Hard stop: log off by 18:00", goalTitle: hoursGoal, why: "Holds the 55-hour ceiling — the week only works if the boundary does.", durationMinutes: 15, at: mk(2, 17, 30) },
+    { title: "Weekly review: what shipped, what slips, plan next week", goalTitle: hoursGoal, why: "Closes the loop so next week's plan starts from evidence.", durationMinutes: 30, at: mk(3, 10, 0) },
+  ];
+  const blocks = spec.map((item) => ({
+    id: crypto.randomUUID(),
+    title: item.title,
+    goalTitle: item.goalTitle,
+    why: item.why,
+    durationMinutes: item.durationMinutes,
+    startsAt: item.at.toISOString(),
+    dayLabel: dayLabel(item.at),
+    timeLabel: timeLabel(item.at),
+    done: item.done,
+  }));
+  return {
+    summary: "A realistic week: two deep-work pushes on v1, partner outreach and demos, with recovery and a hard stop to protect the 55-hour ceiling.",
+    goals: [
+      { title: shipGoal, category: "Career", existingGoalId: matchGoal(shipGoal) },
+      { title: hoursGoal, category: "Mindset", existingGoalId: matchGoal(hoursGoal) },
+    ],
+    blocks,
+    meta: { model: "openai/gpt-6-astra", toolCalls: 6, goalsLinked: 2, goalsCreated: 0, blocksScheduled: blocks.length, latencyMs: 4200 },
+    createdAt: new Date().toISOString(),
+    source: "lovable-ai",
+  };
+}
+
 function DashboardView({ goals, plan, reflections, onNavigate }: { goals: GoalItem[]; plan: WeekPlan | null; reflections: Reflection[]; onNavigate: (mode: Mode) => void }) {
   const total = plan?.blocks.length ?? 0;
   const done = plan?.blocks.filter((block) => block.done).length ?? 0;
