@@ -28,3 +28,4 @@
 ## Branding
 - [x] Apply uploaded SENSUS logo to header brand mark, favicon, and social preview
 - [x] Real Execution Roadmap generator (Lovable AI): milestones + deadlines + calendar links, replacing mock WOOP-only output
+- [ ] Add 5 realistic photos to Visions & Affirmations board
