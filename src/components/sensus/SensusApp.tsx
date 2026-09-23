@@ -533,15 +533,3 @@ function ActionsCard({ items, completed, onToggle, onAdd, onRemove, onRename }: 
     <div className="action-add"><input value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") submit(); }} placeholder="Add a custom task" aria-label="New action item" /><Button variant="glass" size="sm" onClick={submit} disabled={!draft.trim()}><Plus className="size-3.5" />Add task</Button></div>
   </article>;
 }
-
-function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  return <Dialog.Root open={open} onOpenChange={onOpenChange}><Dialog.Portal><Dialog.Overlay className="dialog-overlay" /><Dialog.Content className="settings-dialog">
-    <div className="dialog-head"><div><Dialog.Title>Intelligence settings</Dialog.Title><Dialog.Description>Private keys stay on the server and never enter browser storage.</Dialog.Description></div><Dialog.Close asChild><Button variant="icon" size="icon" aria-label="Close settings"><X className="size-4" /></Button></Dialog.Close></div>
-    <div className="connection-list">
-      <div><span className="connection-icon cyan"><Waves /></span><div><b>ElevenLabs Scribe</b><p>Voice transcription</p></div><span className="connected">Connected</span></div>
-      <div><span className="connection-icon violet"><BrainCircuit /></span><div><b>Nebius GLM-5.3-Flash</b><p>Reflection analysis</p></div><span className="connected">Connected</span></div>
-      <div><span className="connection-icon violet"><Sparkles /></span><div><b>Lovable AI · gpt-6-astra</b><p>Agentic week planner, roadmaps, follow-up prompts</p></div><span className="connected">Connected</span></div>
-    </div>
-    <div className="privacy-note"><Settings className="size-4" /><p>Reflections are stored only in this browser. Text and audio are sent to the providers above for analysis and transcription, and are not retained by Sensus.</p></div>
-  </Dialog.Content></Dialog.Portal></Dialog.Root>;
-}
