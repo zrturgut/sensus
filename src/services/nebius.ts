@@ -90,7 +90,7 @@ async function requestNebius(prompt: string, system = "You are a grounded cognit
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "meta-llama/Llama-3.3-70B-Instruct",
+      model: "zai-org/GLM-5.3-Flash",
       temperature: 0.4,
       response_format: { type: "json_object" },
       messages: [
@@ -120,8 +120,8 @@ export const analyzeSensusInput = createServerFn({ method: "POST" })
         detected_distortion: z.string(), reframe: z.string(), blind_spot_insight: z.string(),
         action_items: z.array(z.string()).min(2).max(5), stress_level: z.number().min(1).max(10),
         emotional_tags: z.array(z.string()).min(1).max(5), grounding_micro_habit: z.string(),
-        positive_affirmation: z.string(), affirmation_category: z.string().max(40),
-        vision_tile_suggestion: z.object({ title: z.string().max(120), image_query: z.string().max(80) }),
+        positive_affirmation: z.string(), affirmation_category: z.string().transform((v) => v.slice(0, 40)),
+        vision_tile_suggestion: z.object({ title: z.string().transform((v) => v.slice(0, 120)), image_query: z.string().transform((v) => v.slice(0, 80)) }),
         manifestation_prompt: z.string(),
       });
       const words = data.text.trim().split(/\s+/).filter(Boolean).length;
@@ -133,6 +133,7 @@ export const analyzeSensusInput = createServerFn({ method: "POST" })
       const insufficientParsed = insufficient.safeParse(raw);
       if (insufficientParsed.success) return { ...insufficientParsed.data, source: "nebius" as const };
       const parsed = sufficient.safeParse(raw);
+      if (!parsed.success && raw) console.error("Nebius clarity schema mismatch:", JSON.stringify(parsed.error.issues.slice(0, 6)));
       return parsed.success ? { ...parsed.data, source: "nebius" as const } : clarityFallback(data.text);
     }
     const schema = z.object({ dream: z.string(), internal_friction: z.string(), if_then_plan: z.string() });
