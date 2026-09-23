@@ -4,3 +4,5 @@
 - [x] Add Daily Affirmation Capsule actions and audio playback
 - [x] Add persistent Manifestation & Affirmations vision-board section
 - [x] Verify desktop and mobile flows
+- [x] Apply serene organic sanctuary visual system
+- [x] Verify clarity, vision, and recording states across desktop and mobile
