@@ -89,6 +89,7 @@ export const planWeekFromReflection = createServerFn({ method: "POST" })
               existing_goal_id: z.string().nullable().describe("Id from list_existing_goals, or null for a new goal."),
             }),
             execute: async ({ title, category, existing_goal_id }) => {
+              toolCalls += 1;
               const trimmed = title.trim();
               if (!trimmed) return { ok: false, reason: "empty title" };
               const existing = known.find((goal) => goal.id === existing_goal_id) ?? null;
