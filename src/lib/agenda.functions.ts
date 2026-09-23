@@ -63,17 +63,20 @@ export const planWeekFromReflection = createServerFn({ method: "POST" })
     const blocks: AgendaBlock[] = [];
     const midnight = new Date();
     midnight.setHours(0, 0, 0, 0);
+    const startedAt = Date.now();
+    let toolCalls = 0;
 
     try {
       const lovable = createResponsesGateway(key);
       const result = streamText({
-        model: lovable.responses("openai/gpt-6-astra"),
+        model: lovable.responses(MODEL),
         stopWhen: stepCountIs(50),
         tools: {
           list_existing_goals: tool({
             description: "List the goals the person already tracks in Sensus, with their ids and categories.",
             inputSchema: z.object({}),
             execute: async () => ({
+              toolCalls: ++toolCalls,
               goals: known.length > 0 ? known : [{ id: "none", title: "No goals tracked yet", category: "none" }],
             }),
           }),
