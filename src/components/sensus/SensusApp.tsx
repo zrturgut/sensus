@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import * as Dialog from "@radix-ui/react-dialog";
 import {
   ArrowRight, BookOpen, BrainCircuit, CalendarCheck, CalendarDays, Check, ChevronDown, Copy, Gauge, Goal, LoaderCircle,
-  Mic, Pencil, Plus, Search, Settings, ShieldCheck, Sparkles, Square, Target, Trash2, Waves, X,
+  Mic, Pencil, Plus, Search, ShieldCheck, Sparkles, Square, Target, Trash2, Waves, X,
 } from "lucide-react";
 import logoAsset from "@/assets/sensus-logo.png.asset.json";
 import { analyzeSensusInput, type ClarityResult, type StressBand } from "@/services/nebius";
@@ -122,14 +121,12 @@ function useAtmosphericPointer() {
 export function SensusApp() {
   useAtmosphericPointer();
   const [mode, setMode] = useState<Mode>("week");
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [goals, setGoals] = useStoredState<GoalItem[]>("sensus-goals", initialGoals);
   const [reflections, setReflections] = useStoredState<Reflection[]>("sensus-reflections", []);
   const [plan, setPlan] = useStoredState<WeekPlan | null>("sensus-week-plan", null);
   return <div className="app-shell min-h-screen bg-background text-foreground"><div className="ambient-aurora" aria-hidden="true"><i className="aurora-sage" /><i className="aurora-lavender" /><i className="aurora-sky" /></div>
     <header className="app-header"><div className="header-inner">
       <div className="brand"><LogoMark /><p>Speak once. Get the pattern and a scheduled week.</p></div>
-      <div className="header-actions"><Button variant="icon" size="icon" aria-label="Open settings" onClick={() => setSettingsOpen(true)}><Settings className="size-4" /></Button></div>
     </div></header>
     <main className="main-shell">
       <nav className="mode-dock" aria-label="Sensus modes">
@@ -144,7 +141,6 @@ export function SensusApp() {
           : <ExecuteView goals={goals} setGoals={setGoals} />}
       <div className="safety-note app-footer-note"><ShieldCheck className="size-4" /><p><b>Responsible AI:</b> Sensus is a non-clinical tool for cognitive productivity, not therapy or medical advice. Your reflections stay in this browser; text and audio are sent to AI providers for analysis and transcription only, and are not retained by Sensus.</p></div>
     </main>
-    <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
   </div>;
 }
 
@@ -536,16 +532,4 @@ function ActionsCard({ items, completed, onToggle, onAdd, onRemove, onRename }: 
       : <p className="list-empty">No tasks here yet. Add the one step you can take today.</p>}</div>
     <div className="action-add"><input value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") submit(); }} placeholder="Add a custom task" aria-label="New action item" /><Button variant="glass" size="sm" onClick={submit} disabled={!draft.trim()}><Plus className="size-3.5" />Add task</Button></div>
   </article>;
-}
-
-function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  return <Dialog.Root open={open} onOpenChange={onOpenChange}><Dialog.Portal><Dialog.Overlay className="dialog-overlay" /><Dialog.Content className="settings-dialog">
-    <div className="dialog-head"><div><Dialog.Title>Intelligence settings</Dialog.Title><Dialog.Description>Private keys stay on the server and never enter browser storage.</Dialog.Description></div><Dialog.Close asChild><Button variant="icon" size="icon" aria-label="Close settings"><X className="size-4" /></Button></Dialog.Close></div>
-    <div className="connection-list">
-      <div><span className="connection-icon cyan"><Waves /></span><div><b>ElevenLabs Scribe</b><p>Voice transcription</p></div><span className="connected">Connected</span></div>
-      <div><span className="connection-icon violet"><BrainCircuit /></span><div><b>Nebius GLM-5.3-Flash</b><p>Reflection analysis</p></div><span className="connected">Connected</span></div>
-      <div><span className="connection-icon violet"><Sparkles /></span><div><b>Lovable AI · gpt-6-astra</b><p>Agentic week planner, roadmaps, follow-up prompts</p></div><span className="connected">Connected</span></div>
-    </div>
-    <div className="privacy-note"><Settings className="size-4" /><p>Reflections are stored only in this browser. Text and audio are sent to the providers above for analysis and transcription, and are not retained by Sensus.</p></div>
-  </Dialog.Content></Dialog.Portal></Dialog.Root>;
 }
