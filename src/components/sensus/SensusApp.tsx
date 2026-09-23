@@ -113,7 +113,7 @@ function useAtmosphericPointer() {
 
 export function SensusApp() {
   useAtmosphericPointer();
-  const [mode, setMode] = useState<Mode>("clarity");
+  const [mode, setMode] = useState<Mode>("agenda");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [goals, setGoals] = useStoredState<GoalItem[]>("sensus-goals", initialGoals);
   const [reflections, setReflections] = useStoredState<Reflection[]>("sensus-reflections", []);
