@@ -352,7 +352,89 @@ function WeekView({ goals, setGoals, plan, setPlan, reflections, onSpeak }: { go
         <div className="agenda-blocks">{day.blocks.map((block) => <AgendaBlockCard key={block.id} block={block} onPatch={(patch) => patchBlock(block.id, patch)} onRemove={() => removeBlock(block.id)} />)}</div>
       </div>)}</div>
     </article>}
+
+    {plan && <PlannerEvidence plan={plan} goals={goals} brief={brief} />}
   </section>;
+}
+
+/** Returning-user signal: streak, completion, and capacity trend from real local usage. */
+function MomentumStrip({ reflections, plan }: { reflections: Reflection[]; plan: WeekPlan | null }) {
+  const stats = useMemo(() => {
+    const days = [...new Set(reflections.map((item) => new Date(item.createdAt).toDateString()))];
+    let streak = 0;
+    const cursor = new Date();
+    cursor.setHours(0, 0, 0, 0);
+    if (days.includes(cursor.toDateString()) || days.includes(new Date(cursor.getTime() - 86400000).toDateString())) {
+      if (!days.includes(cursor.toDateString())) cursor.setTime(cursor.getTime() - 86400000);
+      while (days.includes(cursor.toDateString())) { streak += 1; cursor.setTime(cursor.getTime() - 86400000); }
+    }
+    const bands = reflections.filter((item) => item.result).slice(0, 5).reverse().map((item) => item.result!.stress_band);
+    const total = plan?.blocks.length ?? 0;
+    const finished = plan?.blocks.filter((block) => block.done).length ?? 0;
+    return {
+      streak,
+      reflections: reflections.length,
+      completion: total ? Math.round((finished / total) * 100) : 0,
+      total,
+      trend: bands.length >= 2 ? `${bands[0]} → ${bands[bands.length - 1]}` : bands[0] ?? null,
+    };
+  }, [reflections, plan]);
+  if (stats.reflections === 0 && stats.total === 0) return null;
+  return <div className="momentum-strip">
+    <div><span>Reflection streak</span><b>{stats.streak} {stats.streak === 1 ? "day" : "days"}</b></div>
+    <div><span>Reflections logged</span><b>{stats.reflections}</b></div>
+    <div><span>Week completed</span><b>{stats.completion}%</b><i>{stats.total} blocks</i></div>
+    {stats.trend && <div><span>Capacity trend</span><b>{stats.trend}</b></div>}
+  </div>;
+}
+
+/** Measured model advantage: the agentic plan against a single-shot baseline, scored in code. */
+function PlannerEvidence({ plan, goals, brief }: { plan: WeekPlan; goals: GoalItem[]; brief: string }) {
+  const compare = useServerFn(comparePlanners);
+  const [result, setResult] = useStoredState<BenchmarkResult | null>("sensus-benchmark", null);
+  const [running, setRunning] = useState(false);
+  const reflection = brief.trim().length >= 40 ? brief.trim() : plan.summary;
+  const run = async () => {
+    if (running) return;
+    setRunning(true);
+    try {
+      const response = await compare({
+        data: {
+          reflection,
+          goals: goals.map(({ id, title, category }) => ({ id, title, category })),
+          plan: { latencyMs: plan.meta.latencyMs, blocks: plan.blocks.map(({ title, goalTitle, startsAt, durationMinutes }) => ({ title, goalTitle, startsAt, durationMinutes })) },
+        },
+      });
+      setResult(response);
+      if (response.ok) toast.success("Comparison measured against the single-shot baseline.");
+      else toast.error(response.error);
+    } catch { toast.error("The comparison is unavailable right now."); }
+    finally { setRunning(false); }
+  };
+  return <article className="evidence-card">
+    <div className="evidence-head">
+      <div><span className="mini-label"><Gauge className="size-3.5" /> MEASURED ADVANTAGE</span><h2>Why this plan holds up</h2><p>Sensus runs the same reflection through a single-shot planner with no tools and no access to your goals, then scores both plans in code: goal grounding (40), schedulability (30), spread across days (20), recovery block (10).</p></div>
+      <Button variant="glass" onClick={run} disabled={running}>{running ? <LoaderCircle className="size-4 animate-spin" /> : <Gauge className="size-4" />}{running ? "Measuring" : result ? "Re-run comparison" : "Run the comparison"}</Button>
+    </div>
+    <div aria-live="polite">{result?.ok === false && <p className="error-text">{result.error}</p>}
+      {result?.ok && <>
+        <div className="evidence-grid">{[result.agentic, result.baseline].map((score) => <div key={score.label} className={score === result.agentic ? "evidence-column winner" : "evidence-column"}>
+          <span className="evidence-label">{score.label}</span>
+          <strong>{score.score.toFixed(0)}<i>/100</i></strong>
+          <ul>
+            <li><span>Blocks</span><b>{score.blocks}</b></li>
+            <li><span>Grounded in your goals</span><b>{score.linkedToGoals}/{score.blocks}</b></li>
+            <li><span>Schedulable as given</span><b>{score.schedulable}/{score.blocks}</b></li>
+            <li><span>Days covered</span><b>{score.daysCovered}</b></li>
+            <li><span>Recovery blocks</span><b>{score.recoveryBlocks}</b></li>
+            <li><span>Latency</span><b>{(score.latencyMs / 1000).toFixed(1)}s</b></li>
+          </ul>
+        </div>)}</div>
+        <p className="evidence-verdict"><Sparkles className="size-3.5" />{result.verdict}</p>
+        <p className="evidence-stamp">Measured {new Date(result.measuredAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} · scoring is deterministic and runs on your own reflection.</p>
+      </>}
+    </div>
+  </article>;
 }
 
 function groupByDay(blocks: WeekPlan["blocks"]) {
