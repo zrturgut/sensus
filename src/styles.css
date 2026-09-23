@@ -32,10 +32,10 @@
 .app-shell { background: #090d16; isolation: isolate; }
 .app-shell::before,
 .app-shell::after,
-.ambient-bg::after { content: ""; position: fixed; border-radius: 999px; pointer-events: none; z-index: -1; animation: luminous-drift 10s ease-in-out infinite alternate; }
+.ambient-aurora::after { content: ""; position: fixed; border-radius: 999px; pointer-events: none; z-index: -1; animation: luminous-drift 10s ease-in-out infinite alternate; }
 .app-shell::before { width: 550px; height: 550px; top: -96px; left: -80px; background: rgb(79 70 229 / .25); filter: blur(140px); }
 .app-shell::after { width: 500px; height: 500px; top: 33%; right: -96px; background: rgb(244 63 94 / .20); filter: blur(150px); animation-duration: 12s; }
-.ambient-bg::after { width: 600px; height: 600px; bottom: -128px; left: 25%; background: rgb(16 185 129 / .15); filter: blur(160px); animation-duration: 14s; }
+.ambient-aurora::after { width: 600px; height: 600px; bottom: -128px; left: 25%; background: rgb(16 185 129 / .15); filter: blur(160px); animation-duration: 14s; }
 @keyframes luminous-drift { from { opacity: .62; transform: scale(.94) translate3d(-2%, 0, 0); } to { opacity: 1; transform: scale(1.06) translate3d(3%, 2%, 0); } }
 
 .glass-card, .goal-panel, .insight-card, .affirmation-capsule, .vision-card, .affirmation-tile, .settings-dialog {
@@ -81,7 +81,7 @@
 @keyframes focus-drift { to { transform: scale(1.07); } }
 
 @media (max-width: 720px) { .board-controls { width: 100%; justify-content: flex-start; } .vision-footer button { width: 100%; } .dialog-actions > * { flex: 1; } }
-@media (prefers-reduced-motion: reduce) { .app-shell::before, .app-shell::after, .ambient-bg::after, .focus-visualization > img, .focus-breath i, .audio-pulse { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .app-shell::before, .app-shell::after, .ambient-aurora::after, .focus-visualization > img, .focus-breath i, .audio-pulse { animation: none; } }
 
 * { box-sizing: border-box; border-color: var(--border); }
 html { background: var(--background); }
