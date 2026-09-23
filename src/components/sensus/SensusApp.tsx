@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
-  ArrowRight, BookOpen, BrainCircuit, CalendarCheck, CalendarDays, Check, ChevronDown, Copy, Gauge, Goal, LoaderCircle,
+  ArrowRight, BookOpen, BrainCircuit, CalendarCheck, CalendarDays, Check, ChevronDown, Copy, Flag, Gauge, Goal, LayoutDashboard, LoaderCircle,
   Mic, Pencil, Plus, Search, ShieldCheck, Sparkles, Square, Target, Trash2, Waves, X,
 } from "lucide-react";
 import logoAsset from "@/assets/sensus-logo.png.asset.json";
@@ -17,7 +17,7 @@ import { toast } from "sonner";
 
 const example = "I have three major deliverables due this week and I keep thinking everyone will realize I am not capable. I am over-preparing every detail, avoiding asking for help, and staying online late, but I still feel behind. Next week I want to ship the beta and still protect two evenings.";
 
-type Mode = "reflect" | "week" | "execute";
+type Mode = "home" | "reflect" | "week" | "execute";
 type GoalItem = { id: string; title: string; category: string; date: string; status: "In momentum" | "Refining" | "Achieved"; roadmap?: ExecutionRoadmap };
 type Reflection = { id: string; text: string; result?: ClarityResult; guidanceMessage?: string; followUpPrompts?: string[]; gentleFocus?: string; createdAt: string };
 type ActionEdits = { removed: string[]; custom: string[]; renamed: Record<string, string> };
@@ -120,7 +120,7 @@ function useAtmosphericPointer() {
 
 export function SensusApp() {
   useAtmosphericPointer();
-  const [mode, setMode] = useState<Mode>("week");
+  const [mode, setMode] = useState<Mode>("home");
   const [goals, setGoals] = useStoredState<GoalItem[]>("sensus-goals", initialGoals);
   const [reflections, setReflections] = useStoredState<Reflection[]>("sensus-reflections", []);
   const [plan, setPlan] = useStoredState<WeekPlan | null>("sensus-week-plan", null);
