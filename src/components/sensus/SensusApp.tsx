@@ -201,7 +201,7 @@ function ClarityView({ reflections, setReflections, affirmations, setAffirmation
       <ActionsCard items={actionItems} completed={completed} onToggle={toggleAction} onAdd={addAction} onRemove={removeAction} onRename={renameAction} />
       <article className="insight-card wellness-card"><div className="card-top"><span className="icon-box rose"><Gauge /></span><span className="mini-label">WELLNESS PULSE</span></div><div className="stress-row"><div><span>Stress load</span><strong>{result.stress_level}<small>/10</small></strong></div><div className="meter"><i style={{ width: `${result.stress_level * 10}%` }} /></div></div><div className="tag-row">{result.emotional_tags.map((tag) => <span key={tag}>{tag}</span>)}</div><div className="grounding"><Waves className="size-4" /><div><b>2-minute reset</b><p>{result.grounding_micro_habit}</p></div></div></article>
       <div className="safety-note"><ShieldCheck className="size-4" /><p><b>Responsible AI:</b> Non-clinical tool for cognitive productivity. Ephemeral local processing — no personal voice recordings stored on external servers.</p></div>
-    </div></div> : <div className="empty-insights"><BrainCircuit className="size-5" /><span>Your clarity map will unfold here after your first reflection.</span></div>}
+    </div><WeekAgendaCard plan={plan} planning={planning} error={planError} notice={programNotice} onPlan={buildWeek} onClear={() => { setPlan(null); setProgramNotice(""); setPlanError(""); }} /></div> : <div className="empty-insights"><BrainCircuit className="size-5" /><span>Your clarity map will unfold here after your first reflection.</span></div>}
   </section>;
 }
 
