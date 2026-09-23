@@ -143,7 +143,7 @@ export function SensusApp() {
         : mode === "week"
           ? <WeekView goals={goals} setGoals={setGoals} plan={plan} setPlan={setPlan} reflections={reflections} onSpeak={() => setMode("reflect")} />
           : mode === "progress"
-            ? <ProgressView goals={goals} plan={plan} onNavigate={setMode} />
+            ? <ProgressView goals={goals} plan={plan} reflections={reflections} onNavigate={setMode} />
             : <ExecuteView goals={goals} setGoals={setGoals} />}
       <div className="safety-note app-footer-note"><ShieldCheck className="size-4" /><p><b>Responsible AI:</b> Sensus is a non-clinical tool for cognitive productivity, not therapy or medical advice. Your reflections stay in this browser; text and audio are sent to AI providers for analysis and transcription only, and are not retained by Sensus.</p></div>
     </main>
@@ -174,7 +174,8 @@ function DashboardView({ goals, plan, reflections, onNavigate }: { goals: GoalIt
       <div className="dash-progress-top"><div><span className="mini-label"><Gauge className="size-3.5" /> WEEK PROGRESS</span><h2>{total ? `${completion}% of this week's blocks done` : "No week planned yet"}</h2></div>{total > 0 && <strong className="dash-progress-count">{done}/{total}</strong>}</div>
       <div className="dash-meter" role="progressbar" aria-valuenow={completion} aria-valuemin={0} aria-valuemax={100} aria-label="Week completion"><i style={{ width: `${completion}%` }} /></div>
       <p className="dash-progress-sub">{total ? (completion === 100 ? "Every block complete. Take the win." : `${total - done} block${total - done === 1 ? "" : "s"} still open this week.`) : "Speak about your week and Sensus will fill this in."}</p>
-      <div className="dash-progress-meta"><span>{goals.length} goal{goals.length === 1 ? "" : "s"} in play</span><span>{achieved} achieved</span><span>{reflections.length} reflection{reflections.length === 1 ? "" : "s"} logged</span></div>
+      <div className="dash-progress-meta"><span>{goals.length} goal{goals.length === 1 ? "" : "s"} in play</span><span>{achieved} achieved</span><span>{reflections.length} reflection{reflections.length === 1 ? "" : "s"} logged</span>{latest && <span className={`capacity-chip band-${(latest.stress_band ?? "Strained").toLowerCase()}`}><Gauge className="size-3" />Capacity: {latest.stress_band ?? "Strained"}</span>}</div>
+      {latest && <p className="dash-progress-sub capacity-line">{PACE_COPY[latest.stress_band ?? "Strained"] ?? PACE_COPY.Strained}</p>}
     </article>
 
     <div className="dash-grid">
@@ -205,7 +206,10 @@ function DashboardView({ goals, plan, reflections, onNavigate }: { goals: GoalIt
 }
 
 /** Per-goal progress: completed agenda blocks, time invested, and distance to completion. */
-function ProgressView({ goals, plan, onNavigate }: { goals: GoalItem[]; plan: WeekPlan | null; onNavigate: (mode: Mode) => void }) {
+function ProgressView({ goals, plan, reflections, onNavigate }: { goals: GoalItem[]; plan: WeekPlan | null; reflections: Reflection[]; onNavigate: (mode: Mode) => void }) {
+  const signals = reflections.filter((item) => item.result).slice(0, 5);
+  const latest = signals[0]?.result ?? null;
+  const band = latest?.stress_band ?? "Strained";
   const stats = useMemo(() => {
     const blocks = plan?.blocks ?? [];
     const now = Date.now();
