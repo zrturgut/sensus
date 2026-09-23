@@ -6,6 +6,7 @@
 
 @theme inline {
   --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-reflective: "Lora", Georgia, serif;
   --radius-sm: .4rem; --radius-md: .6rem; --radius-lg: .8rem; --radius-xl: 1rem; --radius-2xl: 1.25rem; --radius-3xl: 1.5rem; --radius-4xl: 2rem;
   --color-background: var(--background); --color-foreground: var(--foreground); --color-card: var(--card); --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover); --color-popover-foreground: var(--popover-foreground); --color-primary: var(--primary); --color-primary-bright: var(--primary-bright); --color-primary-foreground: var(--primary-foreground);
@@ -13,25 +14,31 @@
   --color-accent: var(--accent); --color-accent-foreground: var(--accent-foreground); --color-destructive: var(--destructive); --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border); --color-border-bright: var(--border-bright); --color-input: var(--input); --color-ring: var(--ring); --color-ring-offset-background: var(--background);
   --color-surface: var(--surface); --color-surface-bright: var(--surface-bright); --color-cyan: var(--cyan); --color-cyan-bright: var(--cyan-bright); --color-cyan-foreground: var(--cyan-foreground); --color-mint: var(--mint); --color-rose: var(--rose); --color-amber: var(--amber);
-  --shadow-glow-violet: 0 0 30px color-mix(in oklab, var(--primary) 30%, transparent); --shadow-glow-cyan: 0 0 30px color-mix(in oklab, var(--cyan) 25%, transparent);
+  --shadow-glow-violet: 0 16px 44px color-mix(in oklab, var(--primary) 12%, transparent); --shadow-glow-cyan: 0 16px 44px color-mix(in oklab, var(--cyan) 10%, transparent);
 }
 
 :root {
   color-scheme: dark;
-  --background: oklch(.105 .022 264); --foreground: oklch(.95 .014 255); --card: oklch(.16 .028 264 / .76); --card-foreground: oklch(.95 .014 255);
-  --popover: oklch(.15 .03 265); --popover-foreground: oklch(.95 .014 255); --primary: oklch(.62 .24 293); --primary-bright: oklch(.69 .22 293); --primary-foreground: oklch(.985 .005 260);
-  --secondary: oklch(.2 .035 264); --secondary-foreground: oklch(.92 .015 255); --muted: oklch(.19 .028 264); --muted-foreground: oklch(.68 .035 257); --accent: oklch(.23 .06 276); --accent-foreground: oklch(.97 .01 250);
-  --destructive: oklch(.63 .24 27); --destructive-foreground: oklch(.98 .01 20); --border: oklch(.9 .03 260 / .11); --border-bright: oklch(.82 .06 255 / .24); --input: oklch(.9 .03 260 / .13); --ring: oklch(.7 .18 283);
-  --surface: oklch(.15 .032 264 / .74); --surface-bright: oklch(.2 .042 265 / .84); --cyan: oklch(.72 .14 210); --cyan-bright: oklch(.79 .14 204); --cyan-foreground: oklch(.11 .025 250); --mint: oklch(.7 .17 162); --rose: oklch(.65 .24 20); --amber: oklch(.77 .16 72);
+  --background: oklch(.105 .018 260); --foreground: oklch(.95 .012 255); --card: oklch(.18 .024 256 / .3); --card-foreground: oklch(.95 .012 255);
+  --popover: oklch(.16 .026 258 / .96); --popover-foreground: oklch(.95 .012 255); --primary: oklch(.67 .105 158); --primary-bright: oklch(.73 .105 158); --primary-foreground: oklch(.13 .025 160);
+  --secondary: oklch(.21 .03 257 / .7); --secondary-foreground: oklch(.92 .016 255); --muted: oklch(.2 .025 257 / .72); --muted-foreground: oklch(.72 .03 255); --accent: oklch(.3 .055 302 / .5); --accent-foreground: oklch(.96 .012 250);
+  --destructive: oklch(.66 .17 28); --destructive-foreground: oklch(.98 .01 20); --border: oklch(.96 .015 255 / .07); --border-bright: oklch(.87 .04 80 / .16); --input: oklch(.94 .02 255 / .1); --ring: oklch(.72 .09 158);
+  --surface: oklch(.19 .028 258 / .38); --surface-bright: oklch(.24 .034 256 / .58); --cyan: oklch(.77 .09 220); --cyan-bright: oklch(.82 .08 218); --cyan-foreground: oklch(.14 .025 235); --mint: oklch(.7 .13 158); --rose: oklch(.73 .1 18); --amber: oklch(.79 .105 76);
+  --lavender: oklch(.75 .105 300); --sage-aurora: oklch(.7 .15 160 / .15); --lavender-aurora: oklch(.72 .13 300 / .15); --sky-aurora: oklch(.75 .12 225 / .12);
+  --glass-shadow: 0 24px 70px oklch(.04 .015 260 / .35), inset 0 1px 0 oklch(.96 .015 80 / .04);
 }
 
 * { box-sizing: border-box; border-color: var(--border); }
 html { background: var(--background); }
-body { margin: 0; background: var(--background); color: var(--foreground); font-family: var(--font-sans); letter-spacing: 0; }
+body { margin: 0; background: var(--background); color: var(--foreground); font-family: var(--font-sans); letter-spacing: 0; line-height: 1.6; }
 button, input, textarea, select { font: inherit; }
 button { cursor: pointer; }
 ::selection { background: color-mix(in oklab, var(--primary) 40%, transparent); }
-.ambient-grid { position: fixed; inset: 0; pointer-events: none; background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px); background-size: 64px 64px; mask-image: linear-gradient(to bottom, black, transparent 42%); opacity: .22; }
+.ambient-aurora { position: fixed; inset: 0; pointer-events: none; overflow: hidden; isolation: isolate; }
+.ambient-aurora i { position: absolute; display: block; border-radius: 50%; filter: blur(96px); will-change: transform; }
+.aurora-sage { width: 52vw; height: 42vw; top: -15vw; left: -8vw; background: radial-gradient(circle, var(--sage-aurora), transparent 68%); animation: aurora-sage 18s ease-in-out infinite alternate; }
+.aurora-lavender { width: 46vw; height: 48vw; top: 18vh; right: -15vw; background: radial-gradient(circle, var(--lavender-aurora), transparent 68%); animation: aurora-lavender 20s ease-in-out infinite alternate; }
+.aurora-sky { width: 48vw; height: 38vw; bottom: -12vw; left: 22vw; background: radial-gradient(circle, var(--sky-aurora), transparent 70%); animation: aurora-sky 17s ease-in-out infinite alternate; }
 .app-header { position: sticky; top: 0; z-index: 40; border-bottom: 1px solid var(--border); background: color-mix(in oklab, var(--background) 88%, transparent); backdrop-filter: blur(22px); }
 .header-inner { max-width: 1480px; min-height: 76px; margin: auto; padding: 0 28px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .brand, .header-actions, .status-cluster, .mode-option, .eyebrow, .card-top, .drawer-trigger, .stress-row, .board-heading, .vision-meta, .dialog-head, .connection-list>div, .privacy-note { display: flex; align-items: center; }
