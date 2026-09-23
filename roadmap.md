@@ -9,3 +9,6 @@
 - [x] Extend affirmations with categories and suggested vision tiles
 - [x] Add persistent intention favorites and image-backed affirmation wall
 - [x] Verify affirmation generation, pinning, audio fallback, and persistence
+- [x] Add Vision Board as a dedicated adjacent mode
+- [x] Apply the Neutral Elegance visual system
+- [x] Verify all three modes on desktop and mobile
