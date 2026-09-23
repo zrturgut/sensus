@@ -34,6 +34,19 @@ const BAND_COPY: Record<StressBand, { hint: string; width: string }> = {
   Depleted: { hint: "Energy is already spent. Recovery is the productive move.", width: "100%" },
 };
 
+/** Demo clarity map shown before the first real analysis, so the demo is never empty. Labeled "Demo reasoning" until replaced by a live run. */
+const DEMO_CLARITY: ClarityResult = {
+  is_sufficient: true,
+  detected_distortion: "Impostor spiral + all-or-nothing thinking",
+  reframe: "Over-preparing feels like safety, but it is quietly costing you the ask-for-help moves that would actually ship the beta. Three deliverables is a workload problem, not a competence verdict.",
+  blind_spot_insight: "You may be buying certainty with late nights — the pattern reads as diligence while it delays the very feedback that would settle the doubt.",
+  action_items: ["Pick the one deliverable that must be excellent and timebox the rest", "Send one ask-for-help message before end of day", "Block two protected evenings for the beta ship"],
+  stress_band: "Strained",
+  emotional_tags: ["overwhelmed", "self-doubt", "driven"],
+  grounding_micro_habit: "Before opening your laptop, write one sentence: 'Today ships X.' Then exhale for six slow counts, twice.",
+  source: "demo",
+};
+
 function useStoredState<T>(key: string, initial: T) {
   const [value, setValue] = useState(initial);
   const hydrated = useRef(false);
@@ -260,8 +273,8 @@ function ReflectView({ reflections, setReflections, goals, setGoals, setPlan, on
 }) {
   const analyze = useServerFn(analyzeSensusInput);
   const planWeek = useServerFn(planWeekFromReflection);
-  const [text, setText] = useState("");
-  const [result, setResult] = useState<ClarityResult | null>(reflections.find((item) => item.result)?.result ?? null);
+  const [text, setText] = useState(reflections[0]?.text ?? example);
+  const [result, setResult] = useState<ClarityResult | null>(reflections.find((item) => item.result)?.result ?? DEMO_CLARITY);
   const [loading, setLoading] = useState(false);
   const [scheduling, setScheduling] = useState(false);
   const [error, setError] = useState("");
