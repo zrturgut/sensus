@@ -110,6 +110,7 @@ export const planWeekFromReflection = createServerFn({ method: "POST" })
               duration_minutes: z.number().describe("Realistic length, 15 to 120."),
             }),
             execute: async ({ title, goal_title, why, day_offset, start_time, duration_minutes }) => {
+              toolCalls += 1;
               if (blocks.length >= 12) return { ok: false, reason: "agenda is full" };
               const offset = Math.min(7, Math.max(1, Math.round(Number.isFinite(day_offset) ? day_offset : 1)));
               const [rawHour, rawMinute] = start_time.split(":");
