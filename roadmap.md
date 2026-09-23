@@ -29,3 +29,5 @@
 - [x] Apply uploaded SENSUS logo to header brand mark, favicon, and social preview
 - [x] Real Execution Roadmap generator (Lovable AI): milestones + deadlines + calendar links, replacing mock WOOP-only output
 - [x] Add 5 realistic photos to Visions & Affirmations board
+- [x] Agentic week planner: reflection -> goals + scheduled agenda blocks with calendar links
+- [x] Fix stale-closure duplicate goal after Vision Art generation
