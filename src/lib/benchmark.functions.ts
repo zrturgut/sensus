@@ -105,7 +105,7 @@ export const comparePlanners = createServerFn({ method: "POST" })
     try {
       const lovable = createResponsesGateway(key);
       const startedAt = Date.now();
-      const baseline = generateText({
+      const baseline = await generateText({
         model: lovable.responses(MODEL),
         output: Output.object({ schema: baselineSchema }),
         system:
@@ -115,11 +115,11 @@ export const comparePlanners = createServerFn({ method: "POST" })
           openai: { forceReasoning: true, reasoningEffort: "low", reasoningSummary: "auto", store: false, include: ["reasoning.encrypted_content"] },
         },
       });
-      const baselineOutput = await baseline.output;
+      const baselineOutput = baseline.output;
       const baselineLatency = Date.now() - startedAt;
       const midnight = new Date();
       midnight.setHours(0, 0, 0, 0);
-      const baselineBlocks: NormalizedBlock[] = (baselineOutput?.blocks ?? []).slice(0, 14).map((block) => {
+      const baselineBlocks: NormalizedBlock[] = (baselineOutput?.blocks ?? []).slice(0, 14).map((block: z.infer<typeof baselineSchema>["blocks"][number]) => {
         const offset = Math.round(Number(block.day_offset));
         const [rawHour, rawMinute] = String(block.start_time).split(":");
         const hour = Number.parseInt(rawHour ?? "", 10);
