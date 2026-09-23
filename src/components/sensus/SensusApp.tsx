@@ -136,7 +136,7 @@ export function SensusApp() {
         <button className={mode === "execute" ? "mode-option active" : "mode-option"} onClick={() => setMode("execute")}><Target className="size-4" /><span>Execution</span></button>
       </nav>
       {mode === "home"
-        ? <DashboardView goals={goals} plan={plan} reflections={reflections} onNavigate={setMode} />
+        ? <DashboardView goals={goals} plan={plan} reflections={reflections} onNavigate={setMode} onLoadDemo={() => { setPlan(buildDemoWeekPlan(goals)); toast.success("Demo week loaded — see My Week for the full agenda."); }} />
         : mode === "reflect"
         ? <ReflectView reflections={reflections} setReflections={setReflections} goals={goals} setGoals={setGoals} setPlan={setPlan} onScheduled={() => setMode("week")} />
           : mode === "week"
@@ -153,7 +153,53 @@ const PACE_COPY: Record<string, string> = {
   Depleted: "Capacity is depleted — cut the week back to one block a day and keep the reset.",
 };
 
-function DashboardView({ goals, plan, reflections, onNavigate }: { goals: GoalItem[]; plan: WeekPlan | null; reflections: Reflection[]; onNavigate: (mode: Mode) => void }) {
+/** Demo agenda for pitches: realistic blocks across the next four days, linked to the tracked goals. */
+function buildDemoWeekPlan(goals: GoalItem[]): WeekPlan {
+  const matchGoal = (title: string) => goals.find((goal) => goal.title.trim().toLowerCase() === title.trim().toLowerCase())?.id ?? null;
+  const shipGoal = "Ship v1 to 10 design partners";
+  const hoursGoal = "Keep my week under 55 hours";
+  const mk = (dayOffset: number, hour: number, minute: number) => {
+    const date = new Date();
+    date.setDate(date.getDate() + dayOffset);
+    date.setHours(hour, minute, 0, 0);
+    return date;
+  };
+  const dayLabel = (date: Date) => date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  const timeLabel = (date: Date) => date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  const spec: Array<{ title: string; goalTitle: string; why: string; durationMinutes: number; at: Date; done?: boolean }> = [
+    { title: "Deep work: finalize the v1 onboarding flow", goalTitle: shipGoal, why: "The highest-leverage block — onboarding is what design partners judge first.", durationMinutes: 90, at: mk(0, 9, 0), done: true },
+    { title: "Founder reset: walk + two-minute breathing", goalTitle: hoursGoal, why: "Protects capacity before the afternoon push; small recovery keeps the week sustainable.", durationMinutes: 20, at: mk(0, 13, 0), done: true },
+    { title: "Outreach: message 4 design partners", goalTitle: shipGoal, why: "Pipeline work compounds — four quality touches beat a launch-day scramble.", durationMinutes: 60, at: mk(1, 9, 30) },
+    { title: "Review activation metrics and tighten the demo script", goalTitle: shipGoal, why: "Grounds the next demo calls in real numbers, not vibes.", durationMinutes: 45, at: mk(1, 16, 0) },
+    { title: "Demo calls with 2 design partners", goalTitle: shipGoal, why: "Direct feedback from the exact people v1 is for.", durationMinutes: 60, at: mk(2, 8, 30) },
+    { title: "Hard stop: log off by 18:00", goalTitle: hoursGoal, why: "Holds the 55-hour ceiling — the week only works if the boundary does.", durationMinutes: 15, at: mk(2, 17, 30) },
+    { title: "Weekly review: what shipped, what slips, plan next week", goalTitle: hoursGoal, why: "Closes the loop so next week's plan starts from evidence.", durationMinutes: 30, at: mk(3, 10, 0) },
+  ];
+  const blocks = spec.map((item) => ({
+    id: crypto.randomUUID(),
+    title: item.title,
+    goalTitle: item.goalTitle,
+    why: item.why,
+    durationMinutes: item.durationMinutes,
+    startsAt: item.at.toISOString(),
+    dayLabel: dayLabel(item.at),
+    timeLabel: timeLabel(item.at),
+    done: item.done ?? false,
+  }));
+  return {
+    summary: "A realistic week: two deep-work pushes on v1, partner outreach and demos, with recovery and a hard stop to protect the 55-hour ceiling.",
+    goals: [
+      { title: shipGoal, category: "Career", existingGoalId: matchGoal(shipGoal) },
+      { title: hoursGoal, category: "Mindset", existingGoalId: matchGoal(hoursGoal) },
+    ],
+    blocks,
+    meta: { model: "openai/gpt-6-astra", toolCalls: 6, goalsLinked: 2, goalsCreated: 0, blocksScheduled: blocks.length, latencyMs: 4200 },
+    createdAt: new Date().toISOString(),
+    source: "lovable-ai",
+  };
+}
+
+function DashboardView({ goals, plan, reflections, onNavigate, onLoadDemo }: { goals: GoalItem[]; plan: WeekPlan | null; reflections: Reflection[]; onNavigate: (mode: Mode) => void; onLoadDemo: () => void }) {
   const total = plan?.blocks.length ?? 0;
   const done = plan?.blocks.filter((block) => block.done).length ?? 0;
   const completion = total ? Math.round((done / total) * 100) : 0;
@@ -188,7 +234,7 @@ function DashboardView({ goals, plan, reflections, onNavigate }: { goals: GoalIt
           <span className="dash-block-time">{block.dayLabel}<i>{block.timeLabel}</i></span>
           <div><b>{block.title}</b><span>{block.goalTitle} · {block.durationMinutes} min</span></div>
         </li>)}</ul>
-          : <div className="dash-empty"><CalendarDays className="size-5" /><span>{plan ? "Every block is done. Clear space ahead." : "Tell Sensus what matters next week to build the schedule."}</span></div>}
+          : <div className="dash-empty"><CalendarDays className="size-5" /><span>{plan ? "Every block is done. Clear space ahead." : "Tell Sensus what matters next week to build the schedule."}</span>{!plan && <Button variant="glass" size="sm" onClick={onLoadDemo}><Sparkles className="size-3.5" />Load a demo week</Button>}</div>}
       </article>
 
       <article className="dash-card">
@@ -402,7 +448,7 @@ function WeekView({ goals, setGoals, plan, setPlan, reflections, onSpeak }: { go
 
 
     {!plan && !composing
-      ? <div className="week-cold-open"><CalendarDays className="size-6" /><b>Your week is open.</b><span>Tell Sensus what matters next week and it will build the schedule.</span><div className="cold-open-actions"><Button size="lg" onClick={onSpeak}><Mic className="size-4" />Speak about your week</Button><Button variant="glass" size="lg" onClick={() => setComposing(true)}><Pencil className="size-4" />Type it instead</Button></div></div>
+      ? <div className="week-cold-open"><CalendarDays className="size-6" /><b>Your week is open.</b><span>Tell Sensus what matters next week and it will build the schedule.</span><div className="cold-open-actions"><Button size="lg" onClick={onSpeak}><Mic className="size-4" />Speak about your week</Button><Button variant="glass" size="lg" onClick={() => setComposing(true)}><Pencil className="size-4" />Type it instead</Button><Button variant="ghost" size="lg" onClick={() => { setPlan(buildDemoWeekPlan(goals)); toast.success("Demo week loaded"); }}><Sparkles className="size-4" />Load a demo week</Button></div></div>
       : <div className="agenda-composer">
         <textarea value={brief} onChange={(event) => setBrief(event.target.value)} placeholder="Next week I want to finish… I have time on… I also need space for…" aria-label="What do you want to do next week?" />
         <Button variant="icon" size="icon" className={dictation.recording ? "agenda-mic recording" : "agenda-mic"} aria-label={dictation.recording ? "Stop planning by voice" : "Plan by voice"} onClick={dictation.toggle}>{dictation.recording ? <Square className="size-4 fill-current" /> : dictation.transcribing ? <LoaderCircle className="size-4 animate-spin" /> : <Mic className="size-4" />}</Button>
