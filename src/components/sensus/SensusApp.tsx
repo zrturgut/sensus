@@ -355,7 +355,8 @@ function BoardView({ goals, setGoals, affirmations, setAffirmations }: { goals: 
         const body = await response.json().catch(() => null) as { url?: string; prompt?: string; error?: string } | null;
         if (!response.ok || !body?.url) throw new Error(body?.error ?? "Vision Art could not be created.");
         const imageUrl = body.url;
-        setGoals([{ ...goal, imageUrl, ...(body.prompt ? { imagePrompt: body.prompt } : {}) }, ...goals]); setArtNotice("Your new vision and artwork are ready.");
+        const base = goals.some((item) => item.id === goal.id) ? goals : [goal, ...goals];
+        setGoals(base.map((item) => item.id === goal.id ? { ...item, imageUrl, ...(body.prompt ? { imagePrompt: body.prompt } : {}) } : item)); setArtNotice("Your new vision and artwork are ready.");
       } catch (caught) { setArtNotice(caught instanceof Error ? caught.message : "Your vision was saved with curated artwork."); }
       finally { setGenerating(null); }
     }
