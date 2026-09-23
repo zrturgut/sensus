@@ -138,7 +138,7 @@ export function SensusApp() {
       {mode === "reflect"
         ? <ReflectView reflections={reflections} setReflections={setReflections} goals={goals} setGoals={setGoals} setPlan={setPlan} onScheduled={() => setMode("week")} />
         : mode === "week"
-          ? <WeekView goals={goals} setGoals={setGoals} plan={plan} setPlan={setPlan} onSpeak={() => setMode("reflect")} />
+          ? <WeekView goals={goals} setGoals={setGoals} plan={plan} setPlan={setPlan} reflections={reflections} onSpeak={() => setMode("reflect")} />
           : <ExecuteView goals={goals} setGoals={setGoals} />}
       <div className="safety-note app-footer-note"><ShieldCheck className="size-4" /><p><b>Responsible AI:</b> Sensus is a non-clinical tool for cognitive productivity, not therapy or medical advice. Your reflections stay in this browser; text and audio are sent to AI providers for analysis and transcription only, and are not retained by Sensus.</p></div>
     </main>
