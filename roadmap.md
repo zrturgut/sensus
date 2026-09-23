@@ -23,4 +23,4 @@
 - [x] Add searchable, date-filtered reflection history
 - [x] Persist guidance entries and AI follow-up prompts
 - [x] Generate personalized journaling prompts through Lovable AI Gateway
-- [ ] Verify history and follow-up flows across desktop and mobile
+- [x] Verify history and follow-up flows across desktop and mobile
