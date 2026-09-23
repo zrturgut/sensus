@@ -64,7 +64,7 @@ function useAtmosphericPointer() {
       const rect = target.getBoundingClientRect();
       target.style.setProperty("--pointer-x", `${x - rect.left}px`);
       target.style.setProperty("--pointer-y", `${y - rect.top}px`);
-      target.dataset.pointerGlow = "true";
+      target.dataset["pointerGlow"] = "true";
       pending = null;
     };
     const queue = (target: HTMLElement, x: number, y: number) => {
@@ -78,16 +78,16 @@ function useAtmosphericPointer() {
     };
     const onPointerOut = (event: PointerEvent) => {
       const target = (event.target as Element | null)?.closest<HTMLElement>(selector);
-      if (target && !target.contains(event.relatedTarget as Node | null)) delete target.dataset.pointerGlow;
+      if (target && !target.contains(event.relatedTarget as Node | null)) delete target.dataset["pointerGlow"];
     };
     const onPointerDown = (event: PointerEvent) => {
       if (event.pointerType === "mouse") return;
       const target = (event.target as Element | null)?.closest<HTMLElement>(selector);
       if (!target) return;
       queue(target, event.clientX, event.clientY);
-      target.dataset.touchGlow = "true";
+      target.dataset["touchGlow"] = "true";
       if (touchTimer) clearTimeout(touchTimer);
-      touchTimer = setTimeout(() => delete target.dataset.touchGlow, 420);
+      touchTimer = setTimeout(() => delete target.dataset["touchGlow"], 420);
     };
     document.addEventListener("pointermove", onPointerMove, { passive: true });
     document.addEventListener("pointerout", onPointerOut, { passive: true });
@@ -160,12 +160,15 @@ function ClarityView({ reflections, setReflections, affirmations, setAffirmation
 
 function HistoryView({ reflections, setReflections }: { reflections: Reflection[]; setReflections: (value: Reflection[]) => void }) {
   const generate = useServerFn(generateFollowUpPrompts);
+  const reflectionRecorder = useRef<Awaited<ReturnType<typeof recordWav>> | null>(null);
   const [search, setSearch] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [draft, setDraft] = useState("");
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [dictating, setDictating] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const normalizedSearch = search.trim().toLowerCase();
   const filtered = reflections.filter((reflection) => {
     const day = reflection.createdAt.slice(0, 10);
@@ -191,6 +194,36 @@ function HistoryView({ reflections, setReflections }: { reflections: Reflection[
     } catch { setError("Sensus could not shape follow-up prompts right now. Your reflection is still here."); }
     finally { setLoadingId(null); }
   };
+  const toggleDictation = async () => {
+    setError("");
+    if (!dictating) {
+      try {
+        reflectionRecorder.current = await recordWav();
+        setDictating(true);
+      } catch {
+        setError("Microphone access is needed to dictate a reflection.");
+      }
+      return;
+    }
+    setDictating(false);
+    try {
+      const file = await reflectionRecorder.current?.stop();
+      reflectionRecorder.current = null;
+      if (!file) return;
+      setTranscribing(true);
+      const form = new FormData();
+      form.append("audio", file);
+      const response = await fetch("/api/transcribe", { method: "POST", body: form });
+      const body = await response.json() as { text?: string; error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Transcription failed.");
+      const spokenText = body.text?.trim();
+      if (spokenText) setDraft((current) => `${current.trim()}${current.trim() ? " " : ""}${spokenText}`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Transcription failed.");
+    } finally {
+      setTranscribing(false);
+    }
+  };
   const grouped = filtered.reduce<Record<string, Reflection[]>>((groups, reflection) => {
     const day = reflection.createdAt.slice(0, 10);
     groups[day] = [...(groups[day] ?? []), reflection];
@@ -198,7 +231,7 @@ function HistoryView({ reflections, setReflections }: { reflections: Reflection[
   }, {});
   return <section className="view-enter history-view">
     <div className="vision-hero history-hero"><div><span className="eyebrow"><BookOpen className="size-3.5" /> REFLECTION HISTORY</span><h1>Notice what changes<br/><span>when you look back.</span></h1></div><p>Search the thoughts, patterns, guidance, and actions that have shaped your recent days.</p></div>
-    <article className="follow-up-composer"><div className="follow-up-copy"><span className="icon-box mint"><Sparkles className="size-4" /></span><div><span className="eyebrow">CONTINUE THE REFLECTION</span><h2>Let one insight open the next.</h2><p>Paste or write a completed reflection. Sensus will shape four personalized questions for your next journaling session.</p></div></div><div className="follow-up-entry"><textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Today I noticed…" aria-label="Completed reflection"/><div><span>{draft.trim() ? `${draft.trim().split(/\s+/).length} words` : "A couple of sentences is enough"}</span><Button onClick={() => createPrompts(draft)} disabled={draft.trim().length < 60 || loadingId !== null}>{loadingId && !reflections.some((item) => item.id === loadingId) ? <LoaderCircle className="size-4 animate-spin" /> : <Sparkles className="size-4" />}Generate follow-up prompts</Button></div></div></article>
+    <article className="follow-up-composer"><div className="follow-up-copy"><span className="icon-box mint"><Sparkles className="size-4" /></span><div><span className="eyebrow">CONTINUE THE REFLECTION</span><h2>Let one insight open the next.</h2><p>Paste or write a completed reflection. Sensus will shape four personalized questions for your next journaling session.</p></div></div><div className="follow-up-entry"><div className="reflection-dictation"><textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Today I noticed…" aria-label="Completed reflection"/><Button className={dictating ? "reflection-mic recording" : "reflection-mic"} variant="icon" size="icon" aria-label={dictating ? "Stop dictation" : transcribing ? "Transcribing reflection" : "Dictate reflection"} aria-pressed={dictating} disabled={transcribing} onClick={toggleDictation}>{transcribing ? <LoaderCircle className="size-4 animate-spin" /> : dictating ? <Square className="size-3.5 fill-current" /> : <Mic className="size-4" />}</Button></div><div><span>{dictating ? "Listening… tap the mic to finish" : transcribing ? "Adding your words…" : draft.trim() ? `${draft.trim().split(/\s+/).length} words` : "A couple of sentences is enough"}</span><Button onClick={() => createPrompts(draft)} disabled={draft.trim().length < 60 || loadingId !== null || dictating || transcribing}>{loadingId && !reflections.some((item) => item.id === loadingId) ? <LoaderCircle className="size-4 animate-spin" /> : <Sparkles className="size-4" />}Generate follow-up prompts</Button></div></div></article>
     {error && <p className="history-error" role="alert">{error}</p>}
     <div className="history-toolbar"><label className="history-search"><Search className="size-4"/><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search reflections, patterns, or actions" aria-label="Search reflection history"/></label><div className="date-filters"><label><span>From</span><input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)}/></label><label><span>To</span><input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)}/></label>{(search || fromDate || toDate) && <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setFromDate(""); setToDate(""); }}><X className="size-3.5"/>Clear</Button>}</div></div>
     <div className="history-summary"><span>{filtered.length} {filtered.length === 1 ? "reflection" : "reflections"}</span><span>{Object.keys(grouped).length} {Object.keys(grouped).length === 1 ? "day" : "days"}</span></div>
