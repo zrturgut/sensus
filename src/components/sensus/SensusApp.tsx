@@ -146,6 +146,25 @@ function ClarityView({ reflections, setReflections, affirmations, setAffirmation
   const [guidance, setGuidance] = useState("");
   const [actionEdits, setActionEdits] = useStoredState<ActionEdits>("sensus-action-edits", { removed: [], custom: [], renamed: {} });
   const [affirmationLoading, setAffirmationLoading] = useState(false); const [audioState, setAudioState] = useState<"idle" | "loading" | "playing">("idle"); const [affirmationNotice, setAffirmationNotice] = useState("");
+  const [plan, setPlan] = useStoredState<WeekPlan | null>("sensus-week-plan", null);
+  const [planning, setPlanning] = useState(false); const [planError, setPlanError] = useState(""); const [programNotice, setProgramNotice] = useState("");
+  const buildWeek = async () => {
+    if (planning) return;
+    const reflection = text.trim();
+    if (reflection.length < 40) { setPlanError("Tell Sensus what you want to do next week, then plan again."); return; }
+    setPlanning(true); setPlanError(""); setProgramNotice("");
+    try {
+      const response = await planWeek({ data: { reflection, goals: goals.map((goal) => ({ id: goal.id, title: goal.title, category: goal.category })) } });
+      if (!response.ok) { setPlanError(response.error); return; }
+      setPlan(response.plan);
+      const fresh = response.plan.goals.filter((item) => !item.existingGoalId && !goals.some((goal) => goal.title.trim().toLowerCase() === item.title.trim().toLowerCase()));
+      if (fresh.length > 0) {
+        setGoals([...fresh.map((item) => ({ id: crypto.randomUUID(), title: item.title, category: item.category, date: "This week", status: "In momentum" as const })), ...goals]);
+        setProgramNotice(`${fresh.length} new intention${fresh.length > 1 ? "s" : ""} added to your programme in Vision & Execution Architecture.`);
+      } else setProgramNotice("Your agenda is linked to intentions you already track.");
+    } catch { setPlanError("Week planning is unavailable right now. Your reflection is still here."); }
+    finally { setPlanning(false); }
+  };
   const toggleRecording = async () => {
     setError("");
     if (!recording) { try { recorder.current = await recordWav(); setRecording(true); setSeconds(0); timer.current = setInterval(() => setSeconds((n) => n + 1), 1000); } catch { setError("Microphone access is needed to record a reflection."); } return; }
