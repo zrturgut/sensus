@@ -84,7 +84,7 @@ function formatTime(seconds: number) { return `${String(Math.floor(seconds / 60)
 function useAtmosphericPointer() {
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const selector = ".section-heading, .vision-hero, .voice-panel, .goal-builder, .insight-card, .agenda-card, .agenda-composer, .history-card, .settings-dialog, .listening-card, .empty-insights, .history-empty";
+    const selector = ".section-heading, .vision-hero, .voice-panel, .goal-builder, .insight-card, .agenda-card, .agenda-composer, .history-card, .settings-dialog, .listening-card, .empty-insights, .history-empty, .progress-goal-card, .dash-progress";
     let frame = 0;
     let pending: { target: HTMLElement; x: number; y: number } | null = null;
     const paint = () => {
