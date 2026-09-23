@@ -576,6 +576,8 @@ button.bg-primary {
 .listening-card > *,
 .empty-insights > *,
 .history-empty > * { position: relative; z-index: 1; }
+/* Keep the vision card's overlay layers absolute above the pointer-glow base */
+.vision-card > .vision-shade, .vision-card > .vision-content { position: absolute; inset: 0; }
 [data-pointer-glow="true"]::after,
 [data-touch-glow="true"]::after { opacity: 1; }
 
