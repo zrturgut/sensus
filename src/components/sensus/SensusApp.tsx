@@ -327,6 +327,9 @@ function WeekView({ goals, setGoals, plan, setPlan, reflections, onSpeak }: { go
   return <section className="view-enter agenda-view">
     <div className="section-heading agenda-hero"><div><span className="eyebrow"><CalendarDays className="size-3.5" /> MY WEEK</span><h1>See your week.<br /><span>Move with intention.</span></h1></div><p>Sensus reads what matters next week, connects it to your goals, and books realistic blocks you can edit.</p></div>
 
+    <MomentumStrip reflections={reflections} plan={plan} />
+
+
     {!plan && !composing
       ? <div className="week-cold-open"><CalendarDays className="size-6" /><b>Your week is open.</b><span>Tell Sensus what matters next week and it will build the schedule.</span><div className="cold-open-actions"><Button size="lg" onClick={onSpeak}><Mic className="size-4" />Speak about your week</Button><Button variant="glass" size="lg" onClick={() => setComposing(true)}><Pencil className="size-4" />Type it instead</Button></div></div>
       : <div className="agenda-composer">
