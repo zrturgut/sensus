@@ -130,11 +130,14 @@ export function SensusApp() {
     </div></header>
     <main className="main-shell">
       <nav className="mode-dock" aria-label="Sensus modes">
+        <button className={mode === "home" ? "mode-option active" : "mode-option"} onClick={() => setMode("home")}><LayoutDashboard className="size-4" /><span>Dashboard</span></button>
         <button className={mode === "reflect" ? "mode-option active" : "mode-option"} onClick={() => setMode("reflect")}><Mic className="size-4" /><span>Reflect</span></button>
         <button className={mode === "week" ? "mode-option active" : "mode-option"} onClick={() => setMode("week")}><CalendarDays className="size-4" /><span>My Week</span></button>
         <button className={mode === "execute" ? "mode-option active" : "mode-option"} onClick={() => setMode("execute")}><Target className="size-4" /><span>Execution</span></button>
       </nav>
-      {mode === "reflect"
+      {mode === "home"
+        ? <DashboardView goals={goals} plan={plan} reflections={reflections} onNavigate={setMode} />
+        : mode === "reflect"
         ? <ReflectView reflections={reflections} setReflections={setReflections} goals={goals} setGoals={setGoals} setPlan={setPlan} onScheduled={() => setMode("week")} />
         : mode === "week"
           ? <WeekView goals={goals} setGoals={setGoals} plan={plan} setPlan={setPlan} reflections={reflections} onSpeak={() => setMode("reflect")} />
