@@ -64,7 +64,7 @@ function useAtmosphericPointer() {
       const rect = target.getBoundingClientRect();
       target.style.setProperty("--pointer-x", `${x - rect.left}px`);
       target.style.setProperty("--pointer-y", `${y - rect.top}px`);
-      target.dataset.pointerGlow = "true";
+      target.dataset["pointerGlow"] = "true";
       pending = null;
     };
     const queue = (target: HTMLElement, x: number, y: number) => {
@@ -78,16 +78,16 @@ function useAtmosphericPointer() {
     };
     const onPointerOut = (event: PointerEvent) => {
       const target = (event.target as Element | null)?.closest<HTMLElement>(selector);
-      if (target && !target.contains(event.relatedTarget as Node | null)) delete target.dataset.pointerGlow;
+      if (target && !target.contains(event.relatedTarget as Node | null)) delete target.dataset["pointerGlow"];
     };
     const onPointerDown = (event: PointerEvent) => {
       if (event.pointerType === "mouse") return;
       const target = (event.target as Element | null)?.closest<HTMLElement>(selector);
       if (!target) return;
       queue(target, event.clientX, event.clientY);
-      target.dataset.touchGlow = "true";
+      target.dataset["touchGlow"] = "true";
       if (touchTimer) clearTimeout(touchTimer);
-      touchTimer = setTimeout(() => delete target.dataset.touchGlow, 420);
+      touchTimer = setTimeout(() => delete target.dataset["touchGlow"], 420);
     };
     document.addEventListener("pointermove", onPointerMove, { passive: true });
     document.addEventListener("pointerout", onPointerOut, { passive: true });
