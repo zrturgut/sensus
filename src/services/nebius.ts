@@ -9,6 +9,8 @@ export type ClarityResult = {
   stress_level: number;
   emotional_tags: string[];
   grounding_micro_habit: string;
+  positive_affirmation: string;
+  manifestation_prompt: string;
   source: "nebius" | "demo";
 };
 
@@ -26,6 +28,7 @@ const inputSchema = z.discriminatedUnion("kind", [
 
 function clarityFallback(text: string): ClarityResult {
   const burnout = /tired|exhaust|burnout|sleep|morning/i.test(text);
+  const overload = /work|deadline|deliver|behind|capable|imposter/i.test(text);
   return {
     detected_distortion: burnout ? "All-or-nothing thinking" : "Catastrophizing + mind reading",
     reframe: burnout
@@ -40,6 +43,14 @@ function clarityFallback(text: string): ClarityResult {
     stress_level: burnout ? 7 : 8,
     emotional_tags: burnout ? ["depleted", "frustrated", "hopeful"] : ["overwhelmed", "self-doubt", "driven"],
     grounding_micro_habit: "Exhale longer than you inhale for six slow breaths, then name one thing you can control in the next ten minutes.",
+    positive_affirmation: burnout
+      ? "I honor my energy, move with intention, and grow stronger through every gentle step."
+      : overload
+        ? "I trust my capability, share my work with courage, and create progress without proving my worth."
+        : "I meet this moment with clarity, self-trust, and the courage to shape what comes next.",
+    manifestation_prompt: burnout
+      ? "See yourself ending today restored, proud of one meaningful promise kept to yourself."
+      : "Picture tonight: the essential work is complete, your shoulders are relaxed, and your confidence feels earned.",
     source: "demo",
   };
 }
@@ -88,8 +99,9 @@ export const analyzeSensusInput = createServerFn({ method: "POST" })
         detected_distortion: z.string(), reframe: z.string(), blind_spot_insight: z.string(),
         action_items: z.array(z.string()).min(2).max(5), stress_level: z.number().min(1).max(10),
         emotional_tags: z.array(z.string()).min(1).max(5), grounding_micro_habit: z.string(),
+        positive_affirmation: z.string(), manifestation_prompt: z.string(),
       });
-      const raw = await requestNebius(`Analyze this reflection: ${data.text}\nReturn keys: detected_distortion, reframe, blind_spot_insight, action_items, stress_level, emotional_tags, grounding_micro_habit.`);
+      const raw = await requestNebius(`Analyze this reflection: ${data.text}\nReturn keys: detected_distortion, reframe, blind_spot_insight, action_items, stress_level, emotional_tags, grounding_micro_habit, positive_affirmation, manifestation_prompt. positive_affirmation must be a bold, present-tense, uplifting mantra derived directly from transforming the user's current challenge into a self-affirming strength. manifestation_prompt must be a short, vivid sentence visualizing today's best possible outcome.`);
       const parsed = schema.safeParse(raw);
       return parsed.success ? { ...parsed.data, source: "nebius" as const } : clarityFallback(data.text);
     }

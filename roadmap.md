@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Extend clarity analysis with positive affirmation and manifestation prompt
-- [ ] Add Daily Affirmation Capsule actions and audio playback
-- [ ] Add persistent Manifestation & Affirmations vision-board section
-- [ ] Verify desktop and mobile flows
+- [x] Extend clarity analysis with positive affirmation and manifestation prompt
+- [x] Add Daily Affirmation Capsule actions and audio playback
+- [x] Add persistent Manifestation & Affirmations vision-board section
+- [x] Verify desktop and mobile flows
