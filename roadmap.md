@@ -26,5 +26,5 @@
 - [x] Verify history and follow-up flows across desktop and mobile
 
 ## Branding
-- [ ] Apply uploaded SENSUS logo to header brand mark, favicon, and social preview
-- [ ] Real Execution Roadmap generator (Lovable AI): milestones + deadlines + calendar links, replacing mock WOOP-only output
+- [x] Apply uploaded SENSUS logo to header brand mark, favicon, and social preview
+- [x] Real Execution Roadmap generator (Lovable AI): milestones + deadlines + calendar links, replacing mock WOOP-only output
