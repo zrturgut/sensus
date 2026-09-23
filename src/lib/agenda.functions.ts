@@ -2,6 +2,9 @@ import { createServerFn } from "@tanstack/react-start";
 import { stepCountIs, streamText, tool } from "ai";
 import { z } from "zod";
 import { createResponsesGateway } from "./ai-gateway.server";
+import { safeGatewayMessage } from "./gateway-errors";
+
+const MODEL = "openai/gpt-6-astra";
 
 const inputSchema = z.object({
   reflection: z.string().min(40).max(12000),
@@ -17,29 +20,30 @@ export type AgendaBlock = {
   startsAt: string;
   dayLabel: string;
   timeLabel: string;
+  done?: boolean;
 };
 
 export type AgendaGoal = { title: string; category: string; existingGoalId: string | null };
+
+export type PlanMeta = {
+  model: string;
+  toolCalls: number;
+  goalsLinked: number;
+  goalsCreated: number;
+  blocksScheduled: number;
+  latencyMs: number;
+};
 
 export type WeekPlan = {
   summary: string;
   goals: AgendaGoal[];
   blocks: AgendaBlock[];
+  meta: PlanMeta;
   createdAt: string;
   source: "lovable-ai";
 };
 
 export type AgendaResult = { ok: true; plan: WeekPlan } | { ok: false; error: string };
-
-function safeGatewayMessage(error: unknown) {
-  const value = error as { statusCode?: number };
-  if (value.statusCode === 402) return "Week planning is paused because AI credits are unavailable. Add credits in workspace billing to continue.";
-  if (value.statusCode === 401) return "Week planning is not configured yet for this project.";
-  if (value.statusCode === 403) return "Week planning is currently unavailable for this workspace.";
-  if (value.statusCode === 429) return "Week planning is resting after high demand. Please try again in a moment.";
-  if (value.statusCode && value.statusCode >= 500) return "Week planning is temporarily unavailable. Please try again shortly.";
-  return "Sensus could not build your week right now. Please try again.";
-}
 
 const CATEGORIES = ["Career", "Fitness", "Mindset", "Creative"];
 
