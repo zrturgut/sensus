@@ -113,7 +113,7 @@ export function SensusApp() {
     const removedTestTexts = ["hello. right now we are testing", "hello, bla bla bla"];
     const cleaned = reflections.filter((item) => !removedTestTexts.includes(item.text.trim().toLowerCase()));
     if (cleaned.length !== reflections.length) setReflections(cleaned);
-  }, []);
+  }, [reflections, setReflections]);
   return <div className="app-shell min-h-screen bg-background text-foreground"><div className="ambient-aurora" aria-hidden="true"><i className="aurora-sage" /><i className="aurora-lavender" /><i className="aurora-sky" /></div>
     <header className="app-header"><div className="header-inner">
       <div className="brand"><LogoMark /><div><div className="brand-name">SENSUS</div><p>Voice-first clarity, grounded execution & vision</p></div></div>
