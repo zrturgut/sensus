@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
   ArrowRight, BookOpen, BrainCircuit, CalendarCheck, CalendarDays, Check, ChevronDown, Copy, Flag, Gauge, Goal, LayoutDashboard, LoaderCircle,
-  Mic, Pencil, Plus, Search, ShieldCheck, Sparkles, Square, Target, Trash2, Waves, X,
+  Mic, Pencil, Plus, Search, ShieldCheck, Sparkles, Square, Target, Timer, Trash2, TrendingUp, Waves, X,
 } from "lucide-react";
 import logoAsset from "@/assets/sensus-logo.png.asset.json";
 import { analyzeSensusInput, type ClarityResult, type StressBand } from "@/services/nebius";
@@ -17,7 +17,7 @@ import { toast } from "sonner";
 
 const example = "I have three major deliverables due this week and I keep thinking everyone will realize I am not capable. I am over-preparing every detail, avoiding asking for help, and staying online late, but I still feel behind. Next week I want to ship the beta and still protect two evenings.";
 
-type Mode = "home" | "reflect" | "week" | "execute";
+type Mode = "home" | "reflect" | "week" | "progress" | "execute";
 type GoalItem = { id: string; title: string; category: string; date: string; status: "In momentum" | "Refining" | "Achieved"; roadmap?: ExecutionRoadmap };
 type Reflection = { id: string; text: string; result?: ClarityResult; guidanceMessage?: string; followUpPrompts?: string[]; gentleFocus?: string; createdAt: string };
 type ActionEdits = { removed: string[]; custom: string[]; renamed: Record<string, string> };
@@ -133,6 +133,7 @@ export function SensusApp() {
         <button className={mode === "home" ? "mode-option active" : "mode-option"} onClick={() => setMode("home")}><LayoutDashboard className="size-4" /><span>Dashboard</span></button>
         <button className={mode === "reflect" ? "mode-option active" : "mode-option"} onClick={() => setMode("reflect")}><Mic className="size-4" /><span>Reflect</span></button>
         <button className={mode === "week" ? "mode-option active" : "mode-option"} onClick={() => setMode("week")}><CalendarDays className="size-4" /><span>My Week</span></button>
+        <button className={mode === "progress" ? "mode-option active" : "mode-option"} onClick={() => setMode("progress")}><TrendingUp className="size-4" /><span>Progress</span></button>
         <button className={mode === "execute" ? "mode-option active" : "mode-option"} onClick={() => setMode("execute")}><Target className="size-4" /><span>Execution</span></button>
       </nav>
       {mode === "home"
@@ -141,7 +142,9 @@ export function SensusApp() {
         ? <ReflectView reflections={reflections} setReflections={setReflections} goals={goals} setGoals={setGoals} setPlan={setPlan} onScheduled={() => setMode("week")} />
         : mode === "week"
           ? <WeekView goals={goals} setGoals={setGoals} plan={plan} setPlan={setPlan} reflections={reflections} onSpeak={() => setMode("reflect")} />
-          : <ExecuteView goals={goals} setGoals={setGoals} />}
+          : mode === "progress"
+            ? <ProgressView goals={goals} plan={plan} onNavigate={setMode} />
+            : <ExecuteView goals={goals} setGoals={setGoals} />}
       <div className="safety-note app-footer-note"><ShieldCheck className="size-4" /><p><b>Responsible AI:</b> Sensus is a non-clinical tool for cognitive productivity, not therapy or medical advice. Your reflections stay in this browser; text and audio are sent to AI providers for analysis and transcription only, and are not retained by Sensus.</p></div>
     </main>
   </div>;
