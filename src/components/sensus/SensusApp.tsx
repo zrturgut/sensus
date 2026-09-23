@@ -184,6 +184,7 @@ function ReflectView({ reflections, setReflections, goals, setGoals, setPlan, on
       setPlan(response.plan);
       const fresh = response.plan.goals.filter((item) => !item.existingGoalId && !goals.some((goal) => goal.title.trim().toLowerCase() === item.title.trim().toLowerCase()));
       if (fresh.length) setGoals([...fresh.map((item) => ({ id: crypto.randomUUID(), title: item.title, category: item.category, date: "This week", status: "In momentum" as const })), ...goals]);
+      toast.success("Your week is scheduled.");
       onScheduled();
     } catch { setError("Week planning is unavailable right now.") }
     finally { setScheduling(false); }
@@ -221,7 +222,7 @@ function ReflectView({ reflections, setReflections, goals, setGoals, setPlan, on
       : result ? <div className="results-wrap">
         <div className="results-header"><div><span className="eyebrow">YOUR CLARITY MAP</span><h2>The signal beneath the noise</h2></div><SourcePill source={result.source} /></div>
         <div className="insight-grid">
-          <article className="insight-card compact-insight reframe-card"><div className="card-top"><span className="icon-box violet"><BrainCircuit /></span><span className="mini-label">GROUNDED PERSPECTIVE</span></div><span className="distortion">Pattern · {result.detected_distortion}</span><blockquote>“{result.reframe}”</blockquote><Button variant="ghost" size="sm" onClick={() => navigator.clipboard.writeText(result.reframe)}><Copy className="size-3.5" />Copy insight</Button></article>
+          <article className="insight-card compact-insight reframe-card"><div className="card-top"><span className="icon-box violet"><BrainCircuit /></span><span className="mini-label">GROUNDED PERSPECTIVE</span></div><span className="distortion">Pattern · {result.detected_distortion}</span><blockquote>“{result.reframe}”</blockquote><Button variant="ghost" size="sm" onClick={() => { navigator.clipboard.writeText(result.reframe); toast.success("Insight copied."); }}><Copy className="size-3.5" />Copy insight</Button></article>
           <article className="insight-card compact-insight"><div className="card-top"><span className="icon-box cyan"><Gauge /></span><span className="mini-label">BLIND-SPOT MIRROR</span></div><h3>{result.blind_spot_insight}</h3></article>
           <ActionsCard items={actionItems} completed={completed}
             onToggle={(label) => setCompleted(completed.includes(label) ? completed.filter((item) => item !== label) : [...completed, label])}
@@ -317,6 +318,7 @@ function WeekView({ goals, setGoals, plan, setPlan, reflections, onSpeak }: { go
       setPlan(response.plan);
       const fresh = response.plan.goals.filter((item) => !item.existingGoalId && !goals.some((goal) => goal.title.trim().toLowerCase() === item.title.trim().toLowerCase()));
       if (fresh.length) setGoals([...fresh.map((item) => ({ id: crypto.randomUUID(), title: item.title, category: item.category, date: "This week", status: "In momentum" as const })), ...goals]);
+      toast.success(fresh.length ? `Week built · ${fresh.length} new goal${fresh.length > 1 ? "s" : ""} added` : "Week built and linked to your goals");
       setNotice(fresh.length ? `${fresh.length} new goal${fresh.length > 1 ? "s" : ""} added to your programme.` : "Your agenda is linked to the goals you already track.");
       setComposing(false);
     } catch { setError("Week planning is unavailable right now. Your notes are still here."); }
