@@ -16,3 +16,7 @@
 - [x] Add persistent Nebius FLUX Vision Art with curated fallback
 - [x] Add fullscreen visualization, timer, tab focus, and browser ambience
 - [ ] Verify Vision Art and focus flows across desktop and mobile
+- [ ] Guard short clarity input before analysis
+- [ ] Support Nebius insufficient-context responses
+- [ ] Show a friendly listening card with scenario shortcuts
+- [ ] Verify short and sufficient clarity flows
