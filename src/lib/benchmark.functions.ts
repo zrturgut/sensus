@@ -144,12 +144,22 @@ export const comparePlanners = createServerFn({ method: "POST" })
       const baselineScore = scorePlan("Single-shot baseline", baselineBlocks, data.goals, baselineLatency);
       const agenticScore = scorePlan("Sensus agentic planner", agenticBlocks, data.goals, data.plan.latencyMs);
       const delta = Math.round((agenticScore.score - baselineScore.score) * 10) / 10;
+      const reasons: string[] = [];
+      const share = (score: PlannerScore, value: number) => (score.blocks === 0 ? 0 : value / score.blocks);
+      if (share(agenticScore, agenticScore.linkedToGoals) > share(baselineScore, baselineScore.linkedToGoals))
+        reasons.push(`grounded ${agenticScore.linkedToGoals} of ${agenticScore.blocks} blocks in goals you already track, against ${baselineScore.linkedToGoals} of ${baselineScore.blocks}`);
+      if (share(agenticScore, agenticScore.schedulable) > share(baselineScore, baselineScore.schedulable))
+        reasons.push(`produced ${agenticScore.schedulable} of ${agenticScore.blocks} blocks that are schedulable as given, against ${baselineScore.schedulable} of ${baselineScore.blocks}`);
+      if (agenticScore.daysCovered > baselineScore.daysCovered)
+        reasons.push(`spread the work across ${agenticScore.daysCovered} days instead of ${baselineScore.daysCovered}`);
+      if (agenticScore.recoveryBlocks > 0 && baselineScore.recoveryBlocks === 0) reasons.push("protected recovery time the baseline skipped");
+      if (baselineScore.blocks > agenticScore.blocks) reasons.push(`kept the week to ${agenticScore.blocks} blocks where the baseline booked ${baselineScore.blocks}`);
       const verdict =
         delta > 0
-          ? `The agentic planner scored ${delta} points higher by grounding ${agenticScore.linkedToGoals} of ${agenticScore.blocks} blocks in goals you already track, against ${baselineScore.linkedToGoals} of ${baselineScore.blocks} for the single-shot baseline.`
+          ? `The agentic planner scored ${delta} points higher. It ${reasons.slice(0, 2).join(", and ") || "stayed closer to the constraints in your own words"}.`
           : delta === 0
-            ? "Both planners scored the same on this reflection. The agentic run still links blocks to your tracked goals, which the baseline cannot see."
-            : `The single-shot baseline scored ${Math.abs(delta)} points higher on this reflection. Sensus shows this honestly rather than hiding it.`;
+            ? "Both planners scored the same on this reflection. The agentic run still reads your tracked goals, which the baseline cannot see."
+            : `The single-shot baseline scored ${Math.abs(delta)} points higher on this reflection. Sensus reports that honestly rather than hiding it.`;
 
       return { ok: true, baseline: baselineScore, agentic: agenticScore, verdict, measuredAt: new Date().toISOString() };
     } catch (error) {
