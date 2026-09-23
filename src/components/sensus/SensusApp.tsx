@@ -147,6 +147,60 @@ export function SensusApp() {
   </div>;
 }
 
+function DashboardView({ goals, plan, reflections, onNavigate }: { goals: GoalItem[]; plan: WeekPlan | null; reflections: Reflection[]; onNavigate: (mode: Mode) => void }) {
+  const total = plan?.blocks.length ?? 0;
+  const done = plan?.blocks.filter((block) => block.done).length ?? 0;
+  const completion = total ? Math.round((done / total) * 100) : 0;
+  const upcomingBlocks = useMemo(() => {
+    if (!plan) return [];
+    const now = Date.now();
+    const sorted = [...plan.blocks].sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
+    const future = sorted.filter((block) => !block.done && new Date(block.startsAt).getTime() >= now - 3600000);
+    return (future.length ? future : sorted.filter((block) => !block.done)).slice(0, 4);
+  }, [plan]);
+  const milestones = useMemo(() => goals.flatMap((goal) => (goal.roadmap?.milestones ?? []).map((milestone) => ({ goal, milestone })))
+    .sort((a, b) => new Date(a.milestone.dueDate).getTime() - new Date(b.milestone.dueDate).getTime())
+    .slice(0, 5), [goals]);
+  const achieved = goals.filter((goal) => goal.status === "Achieved").length;
+  const latest = reflections.find((item) => item.result)?.result ?? null;
+
+  return <section className="view-enter dashboard-view">
+    <div className="section-heading"><div><span className="eyebrow"><LayoutDashboard className="size-3.5" /> DASHBOARD</span><h1>Your week,<br /><span>at a glance.</span></h1></div><p>Agenda, milestones, and momentum — everything you track, on one calm surface.</p></div>
+
+    <article className="dash-progress">
+      <div className="dash-progress-top"><div><span className="mini-label"><Gauge className="size-3.5" /> WEEK PROGRESS</span><h2>{total ? `${completion}% of this week's blocks done` : "No week planned yet"}</h2></div>{total > 0 && <strong className="dash-progress-count">{done}/{total}</strong>}</div>
+      <div className="dash-meter" role="progressbar" aria-valuenow={completion} aria-valuemin={0} aria-valuemax={100} aria-label="Week completion"><i style={{ width: `${completion}%` }} /></div>
+      <p className="dash-progress-sub">{total ? (completion === 100 ? "Every block complete. Take the win." : `${total - done} block${total - done === 1 ? "" : "s"} still open this week.`) : "Speak about your week and Sensus will fill this in."}</p>
+      <div className="dash-progress-meta"><span>{goals.length} goal{goals.length === 1 ? "" : "s"} in play</span><span>{achieved} achieved</span><span>{reflections.length} reflection{reflections.length === 1 ? "" : "s"} logged</span></div>
+    </article>
+
+    <div className="dash-grid">
+      <article className="dash-card">
+        <div className="dash-card-head"><div><span className="mini-label"><CalendarDays className="size-3.5" /> THIS WEEK'S AGENDA</span><h3>{plan ? "Up next" : "Nothing scheduled"}</h3></div><Button variant="ghost" size="sm" onClick={() => onNavigate("week")}>{plan ? "Open agenda" : "Plan my week"}<ArrowRight className="size-3.5" /></Button></div>
+        {upcomingBlocks.length ? <ul className="dash-block-list">{upcomingBlocks.map((block) => <li key={block.id}>
+          <span className="dash-block-time">{block.dayLabel}<i>{block.timeLabel}</i></span>
+          <div><b>{block.title}</b><span>{block.goalTitle} · {block.durationMinutes} min</span></div>
+        </li>)}</ul>
+          : <div className="dash-empty"><CalendarDays className="size-5" /><span>{plan ? "Every block is done. Clear space ahead." : "Tell Sensus what matters next week to build the schedule."}</span></div>}
+      </article>
+
+      <article className="dash-card">
+        <div className="dash-card-head"><div><span className="mini-label"><Flag className="size-3.5" /> UPCOMING MILESTONES</span><h3>{milestones.length ? `${milestones.length} on the horizon` : "No roadmaps yet"}</h3></div><Button variant="ghost" size="sm" onClick={() => onNavigate("execute")}>Open execution<ArrowRight className="size-3.5" /></Button></div>
+        {milestones.length ? <ul className="dash-block-list">{milestones.map(({ goal, milestone }) => <li key={`${goal.id}-${milestone.title}`}>
+          <span className="dash-block-time"><Flag className="size-3" /><i>{milestone.dueLabel}</i></span>
+          <div><b>{milestone.title}</b><span>{goal.title}</span></div>
+        </li>)}</ul>
+          : <div className="dash-empty"><Target className="size-5" /><span>Generate an execution roadmap for a goal and its milestones will land here.</span></div>}
+      </article>
+    </div>
+
+    {latest && <article className="dash-card dash-signal">
+      <div className="dash-card-head"><div><span className="mini-label"><BrainCircuit className="size-3.5" /> LATEST SIGNAL</span><h3>{latest.detected_distortion} · {latest.stress_band}</h3></div><Button variant="ghost" size="sm" onClick={() => onNavigate("reflect")}>Reflect again<ArrowRight className="size-3.5" /></Button></div>
+      <blockquote>“{latest.reframe}”</blockquote>
+    </article>}
+  </section>;
+}
+
 function ReflectView({ reflections, setReflections, goals, setGoals, setPlan, onScheduled }: {
   reflections: Reflection[]; setReflections: (v: Reflection[]) => void; goals: GoalItem[]; setGoals: (v: GoalItem[]) => void; setPlan: (v: WeekPlan | null) => void; onScheduled: () => void;
 }) {
