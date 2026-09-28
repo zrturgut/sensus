@@ -26,27 +26,6 @@ const inputSchema = z.object({ text: z.string().min(1).max(12000) });
 const BAND_RUBRIC =
   "stress_band must be exactly one of: Steady (pressure is real but resources still match demand), Strained (demand exceeds resources and recovery is being skipped), Depleted (energy, sleep, or motivation is already spent). Choose the band from evidence in the text, never from tone alone.";
 
-function clarityFallback(text: string): ClarityResult {
-  const burnout = /tired|exhaust|burnout|sleep|morning/i.test(text);
-  return {
-    is_sufficient: true,
-    detected_distortion: burnout ? "All-or-nothing thinking" : "Catastrophizing + mind reading",
-    reframe: burnout
-      ? "Low energy is information, not a character verdict. Protect the smallest repeatable action and let consistency rebuild capacity."
-      : "You are treating uncertainty as evidence of inadequacy. The workload is real, but it does not prove you are failing or that others see you that way.",
-    blind_spot_insight: burnout
-      ? "You may be designing your week for your ideal energy instead of the energy you reliably have."
-      : "Over-preparing may feel responsible, while quietly protecting you from the discomfort of showing unfinished work.",
-    action_items: burnout
-      ? ["Choose one must-do outcome for today", "Take a ten-minute daylight walk", "Set a shutdown alarm for tonight"]
-      : ["Define the smallest shippable version", "Ask one colleague for a reality check", "Block 25 focused minutes before checking messages"],
-    stress_band: burnout ? "Depleted" : "Strained",
-    emotional_tags: burnout ? ["depleted", "frustrated", "hopeful"] : ["overwhelmed", "self-doubt", "driven"],
-    grounding_micro_habit: "Exhale longer than you inhale for six slow breaths, then name one thing you can control in the next ten minutes.",
-    source: "demo",
-  };
-}
-
 async function requestNebius(prompt: string, system: string): Promise<unknown> {
   const key = process.env["NEBIUS_API_KEY"];
   if (!key) return null;
@@ -103,5 +82,6 @@ export const analyzeSensusInput = createServerFn({ method: "POST" })
     if (insufficientParsed.success) return { ...insufficientParsed.data, source: "nebius" };
     const parsed = sufficient.safeParse(raw);
     if (!parsed.success && raw) console.error("Nebius clarity schema mismatch:", JSON.stringify(parsed.error.issues.slice(0, 6)));
-    return parsed.success ? { ...parsed.data, source: "nebius" } : clarityFallback(data.text);
+    if (!parsed.success) throw new Error("Analysis is unavailable right now.");
+    return { ...parsed.data, source: "nebius" };
   });

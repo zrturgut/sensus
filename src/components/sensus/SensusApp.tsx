@@ -12,10 +12,7 @@ import { recordWav } from "./record-wav";
 import { generateFollowUpPrompts } from "@/lib/follow-up.functions";
 import { generateExecutionRoadmap, type ExecutionRoadmap } from "@/lib/roadmap.functions";
 import { planWeekFromReflection, type WeekPlan } from "@/lib/agenda.functions";
-import { comparePlanners, type BenchmarkResult } from "@/lib/benchmark.functions";
 import { toast } from "sonner";
-
-const example = "I have three major deliverables due this week and I keep thinking everyone will realize I am not capable. I am over-preparing every detail, avoiding asking for help, and staying online late, but I still feel behind. Next week I want to ship the beta and still protect two evenings.";
 
 type Mode = "home" | "reflect" | "week" | "execute";
 type GoalItem = { id: string; title: string; category: string; date: string; status: "In momentum" | "Refining" | "Achieved"; roadmap?: ExecutionRoadmap };
@@ -23,28 +20,12 @@ type Reflection = { id: string; text: string; result?: ClarityResult; guidanceMe
 type ActionEdits = { removed: string[]; custom: string[]; renamed: Record<string, string> };
 type ActionEntry = { key: string; label: string; custom: boolean };
 
-const initialGoals: GoalItem[] = [
-  { id: "beta", title: "Ship v1 to 10 design partners", category: "Career", date: "Oct 30", status: "In momentum" },
-  { id: "hours", title: "Keep my week under 55 hours", category: "Mindset", date: "Weekly", status: "Refining" },
-];
+const initialGoals: GoalItem[] = [];
 
 const BAND_COPY: Record<StressBand, { hint: string; width: string }> = {
   Steady: { hint: "Pressure is real, but your resources still match the demand.", width: "33%" },
   Strained: { hint: "Demand is outrunning recovery. Protect one thing this week.", width: "66%" },
   Depleted: { hint: "Energy is already spent. Recovery is the productive move.", width: "100%" },
-};
-
-/** Demo clarity map shown before the first real analysis, so the demo is never empty. Labeled "Demo reasoning" until replaced by a live run. */
-const DEMO_CLARITY: ClarityResult = {
-  is_sufficient: true,
-  detected_distortion: "Impostor spiral + all-or-nothing thinking",
-  reframe: "Over-preparing feels like safety, but it is quietly costing you the ask-for-help moves that would actually ship the beta. Three deliverables is a workload problem, not a competence verdict.",
-  blind_spot_insight: "You may be buying certainty with late nights — the pattern reads as diligence while it delays the very feedback that would settle the doubt.",
-  action_items: ["Pick the one deliverable that must be excellent and timebox the rest", "Send one ask-for-help message before end of day", "Block two protected evenings for the beta ship"],
-  stress_band: "Strained",
-  emotional_tags: ["overwhelmed", "self-doubt", "driven"],
-  grounding_micro_habit: "Before opening your laptop, write one sentence: 'Today ships X.' Then exhale for six slow counts, twice.",
-  source: "demo",
 };
 
 function useStoredState<T>(key: string, initial: T) {
@@ -137,6 +118,16 @@ export function SensusApp() {
   const [goals, setGoals] = useStoredState<GoalItem[]>("sensus-goals", initialGoals);
   const [reflections, setReflections] = useStoredState<Reflection[]>("sensus-reflections", []);
   const [plan, setPlan] = useStoredState<WeekPlan | null>("sensus-week-plan", null);
+  useEffect(() => {
+    if (localStorage.getItem("sensus-demo-purged")) return;
+    localStorage.setItem("sensus-demo-purged", "1");
+    localStorage.removeItem("sensus-benchmark");
+    const t = setTimeout(() => {
+      setPlan((current) => current?.summary.startsWith("A realistic week: two deep-work pushes") ? null : current);
+      setGoals((current) => current.filter((goal) => goal.id !== "beta" && goal.id !== "hours"));
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
   return <div className="app-shell min-h-screen bg-background text-foreground"><div className="ambient-aurora" aria-hidden="true"><i className="aurora-sage" /><i className="aurora-lavender" /><i className="aurora-sky" /></div>
     <header className="app-header"><div className="header-inner">
       <div className="brand"><LogoMark /><p>Clear thinking starts with a conversation.</p></div>
@@ -149,7 +140,7 @@ export function SensusApp() {
         <button className={mode === "execute" ? "mode-option active" : "mode-option"} onClick={() => setMode("execute")}><Target className="size-4" /><span>Execution</span></button>
       </nav>
       {mode === "home"
-        ? <DashboardView goals={goals} plan={plan} reflections={reflections} onNavigate={setMode} onLoadDemo={() => { setPlan(buildDemoWeekPlan(goals)); toast.success("Demo week loaded — see My Week for the full agenda."); }} />
+        ? <DashboardView goals={goals} plan={plan} reflections={reflections} onNavigate={setMode} />
         : mode === "reflect"
         ? <ReflectView reflections={reflections} setReflections={setReflections} goals={goals} setGoals={setGoals} setPlan={setPlan} onScheduled={() => setMode("week")} />
           : mode === "week"
@@ -166,53 +157,7 @@ const PACE_COPY: Record<string, string> = {
   Depleted: "Capacity is depleted — cut the week back to one block a day and keep the reset.",
 };
 
-/** Demo agenda for pitches: realistic blocks across the next four days, linked to the tracked goals. */
-function buildDemoWeekPlan(goals: GoalItem[]): WeekPlan {
-  const matchGoal = (title: string) => goals.find((goal) => goal.title.trim().toLowerCase() === title.trim().toLowerCase())?.id ?? null;
-  const shipGoal = "Ship v1 to 10 design partners";
-  const hoursGoal = "Keep my week under 55 hours";
-  const mk = (dayOffset: number, hour: number, minute: number) => {
-    const date = new Date();
-    date.setDate(date.getDate() + dayOffset);
-    date.setHours(hour, minute, 0, 0);
-    return date;
-  };
-  const dayLabel = (date: Date) => date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-  const timeLabel = (date: Date) => date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  const spec: Array<{ title: string; goalTitle: string; why: string; durationMinutes: number; at: Date; done?: boolean }> = [
-    { title: "Deep work: finalize the v1 onboarding flow", goalTitle: shipGoal, why: "The highest-leverage block — onboarding is what design partners judge first.", durationMinutes: 90, at: mk(0, 9, 0), done: true },
-    { title: "Founder reset: walk + two-minute breathing", goalTitle: hoursGoal, why: "Protects capacity before the afternoon push; small recovery keeps the week sustainable.", durationMinutes: 20, at: mk(0, 13, 0), done: true },
-    { title: "Outreach: message 4 design partners", goalTitle: shipGoal, why: "Pipeline work compounds — four quality touches beat a launch-day scramble.", durationMinutes: 60, at: mk(1, 9, 30) },
-    { title: "Review activation metrics and tighten the demo script", goalTitle: shipGoal, why: "Grounds the next demo calls in real numbers, not vibes.", durationMinutes: 45, at: mk(1, 16, 0) },
-    { title: "Demo calls with 2 design partners", goalTitle: shipGoal, why: "Direct feedback from the exact people v1 is for.", durationMinutes: 60, at: mk(2, 8, 30) },
-    { title: "Hard stop: log off by 18:00", goalTitle: hoursGoal, why: "Holds the 55-hour ceiling — the week only works if the boundary does.", durationMinutes: 15, at: mk(2, 17, 30) },
-    { title: "Weekly review: what shipped, what slips, plan next week", goalTitle: hoursGoal, why: "Closes the loop so next week's plan starts from evidence.", durationMinutes: 30, at: mk(3, 10, 0) },
-  ];
-  const blocks = spec.map((item) => ({
-    id: crypto.randomUUID(),
-    title: item.title,
-    goalTitle: item.goalTitle,
-    why: item.why,
-    durationMinutes: item.durationMinutes,
-    startsAt: item.at.toISOString(),
-    dayLabel: dayLabel(item.at),
-    timeLabel: timeLabel(item.at),
-    done: item.done ?? false,
-  }));
-  return {
-    summary: "A realistic week: two deep-work pushes on v1, partner outreach and demos, with recovery and a hard stop to protect the 55-hour ceiling.",
-    goals: [
-      { title: shipGoal, category: "Career", existingGoalId: matchGoal(shipGoal) },
-      { title: hoursGoal, category: "Mindset", existingGoalId: matchGoal(hoursGoal) },
-    ],
-    blocks,
-    meta: { model: "openai/gpt-6-astra", toolCalls: 6, goalsLinked: 2, goalsCreated: 0, blocksScheduled: blocks.length, latencyMs: 4200 },
-    createdAt: new Date().toISOString(),
-    source: "lovable-ai",
-  };
-}
-
-function DashboardView({ goals, plan, reflections, onNavigate, onLoadDemo }: { goals: GoalItem[]; plan: WeekPlan | null; reflections: Reflection[]; onNavigate: (mode: Mode) => void; onLoadDemo: () => void }) {
+function DashboardView({ goals, plan, reflections, onNavigate }: { goals: GoalItem[]; plan: WeekPlan | null; reflections: Reflection[]; onNavigate: (mode: Mode) => void }) {
   const total = plan?.blocks.length ?? 0;
   const done = plan?.blocks.filter((block) => block.done).length ?? 0;
   const completion = total ? Math.round((done / total) * 100) : 0;
@@ -247,7 +192,7 @@ function DashboardView({ goals, plan, reflections, onNavigate, onLoadDemo }: { g
           <span className="dash-block-time">{block.dayLabel}<i>{block.timeLabel}</i></span>
           <div><b>{block.title}</b><span>{block.goalTitle} · {block.durationMinutes} min</span></div>
         </li>)}</ul>
-          : <div className="dash-empty"><CalendarDays className="size-5" /><span>{plan ? "Every block is done. Clear space ahead." : "Tell Sensus what matters next week to build the schedule."}</span>{!plan && <Button variant="glass" size="sm" onClick={onLoadDemo}><Sparkles className="size-3.5" />Load a demo week</Button>}</div>}
+          : <div className="dash-empty"><CalendarDays className="size-5" /><span>{plan ? "Every block is done. Clear space ahead." : "Tell Sensus what matters next week to build the schedule."}</span>{!plan && <Button variant="glass" size="sm" onClick={() => onNavigate("week")}><CalendarDays className="size-3.5" />Plan my week</Button>}</div>}
       </article>
 
       <article className="dash-card">
@@ -273,8 +218,8 @@ function ReflectView({ reflections, setReflections, goals, setGoals, setPlan, on
 }) {
   const analyze = useServerFn(analyzeSensusInput);
   const planWeek = useServerFn(planWeekFromReflection);
-  const [text, setText] = useState(reflections[0]?.text ?? example);
-  const [result, setResult] = useState<ClarityResult | null>(reflections.find((item) => item.result)?.result ?? DEMO_CLARITY);
+  const [text, setText] = useState("");
+  const [result, setResult] = useState<ClarityResult | null>(reflections.find((item) => item.result)?.result ?? null);
   const [loading, setLoading] = useState(false);
   const [scheduling, setScheduling] = useState(false);
   const [error, setError] = useState("");
@@ -290,7 +235,7 @@ function ReflectView({ reflections, setReflections, goals, setGoals, setPlan, on
     try {
       const next = await analyze({ data: { text } });
       const entry = { id: crypto.randomUUID(), text, createdAt: new Date().toISOString() };
-      if (next.is_sufficient) { setResult(next); setReflections([{ ...entry, result: next }, ...reflections].slice(0, 50)); toast.success(`Capacity: ${next.stress_band}. Dashboard and Progress updated.`); }
+      if (next.is_sufficient) { setResult(next); setReflections([{ ...entry, result: next }, ...reflections].slice(0, 50)); toast.success(`Capacity: ${next.stress_band}. Dashboard updated.`); }
       else { setResult(null); setGuidance(next.guidance_message); setReflections([{ ...entry, guidanceMessage: next.guidance_message }, ...reflections].slice(0, 50)); }
     } catch { setError("Analysis is unavailable right now. Your reflection is still here."); }
     finally { setLoading(false); }
@@ -329,7 +274,7 @@ function ReflectView({ reflections, setReflections, goals, setGoals, setPlan, on
       <div className="transcript-side">
         <div className="panel-label"><span>Reflection transcript</span><span>{wordCount} words</span></div>
         <textarea value={text} onChange={(event) => { setText(event.target.value); setGuidance(""); }} placeholder="What feels tangled right now, and what do you want to do next week?" />
-        <div className="preset-row"><button onClick={() => { setText(example); setGuidance(""); }}><span>⚡</span>Try an example</button></div>
+        
         <div className="analyze-row" aria-live="polite">
           {error && <p className="error-text">{error}</p>}
           <Button size="lg" onClick={runAnalysis} disabled={loading || dictation.recording || !text.trim()}>{loading ? <LoaderCircle className="size-4 animate-spin" /> : <BrainCircuit className="size-4" />}{loading ? "Finding the signal" : "Reveal the signal"}<ArrowRight className="size-4" /></Button>
@@ -338,7 +283,7 @@ function ReflectView({ reflections, setReflections, goals, setGoals, setPlan, on
     </div>
 
     {guidance
-      ? <article className="listening-card view-enter"><span className="icon-box mint"><Waves className="size-4" /></span><div><span className="eyebrow">SENSUS IS LISTENING...</span><h2>A little more context will reveal the pattern.</h2><p>{guidance}</p><div className="preset-row"><button onClick={() => { setText(example); setGuidance(""); }}><span>⚡</span>Try an example</button></div></div></article>
+      ? <article className="listening-card view-enter"><span className="icon-box mint"><Waves className="size-4" /></span><div><span className="eyebrow">SENSUS IS LISTENING...</span><h2>A little more context will reveal the pattern.</h2><p>{guidance}</p></div></article>
       : result ? <div className="results-wrap">
         <div className="results-header"><div><span className="eyebrow">YOUR CLARITY MAP</span><h2>The signal beneath the noise</h2></div><SourcePill source={result.source} /></div>
         <div className="insight-grid">
@@ -461,7 +406,7 @@ function WeekView({ goals, setGoals, plan, setPlan, reflections, onSpeak }: { go
 
 
     {!plan && !composing
-      ? <div className="week-cold-open"><CalendarDays className="size-6" /><b>Your week is open.</b><span>Tell Sensus what matters next week and it will build the schedule.</span><div className="cold-open-actions"><Button size="lg" onClick={onSpeak}><Mic className="size-4" />Speak about your week</Button><Button variant="glass" size="lg" onClick={() => setComposing(true)}><Pencil className="size-4" />Type it instead</Button><Button variant="ghost" size="lg" onClick={() => { setPlan(buildDemoWeekPlan(goals)); toast.success("Demo week loaded"); }}><Sparkles className="size-4" />Load a demo week</Button></div></div>
+      ? <div className="week-cold-open"><CalendarDays className="size-6" /><b>Your week is open.</b><span>Tell Sensus what matters next week and it will build the schedule.</span><div className="cold-open-actions"><Button size="lg" onClick={onSpeak}><Mic className="size-4" />Speak about your week</Button><Button variant="glass" size="lg" onClick={() => setComposing(true)}><Pencil className="size-4" />Type it instead</Button></div></div>
       : <div className="agenda-composer">
         <textarea value={brief} onChange={(event) => setBrief(event.target.value)} placeholder="Next week I want to finish… I have time on… I also need space for…" aria-label="What do you want to do next week?" />
         <Button variant="icon" size="icon" className={dictation.recording ? "agenda-mic recording" : "agenda-mic"} aria-label={dictation.recording ? "Stop planning by voice" : "Plan by voice"} onClick={dictation.toggle}>{dictation.recording ? <Square className="size-4 fill-current" /> : dictation.transcribing ? <LoaderCircle className="size-4 animate-spin" /> : <Mic className="size-4" />}</Button>
@@ -475,7 +420,6 @@ function WeekView({ goals, setGoals, plan, setPlan, reflections, onSpeak }: { go
         <div><span className="mini-label"><CalendarDays className="size-3.5" /> NEXT WEEK AGENDA</span><h2>{done} of {plan.blocks.length} blocks done</h2><p>{plan.summary}</p></div>
         <div className="agenda-head-actions"><Button variant="glass" size="sm" onClick={() => setComposing(true)}><Pencil className="size-3.5" />Edit brief</Button><ConfirmRemove label="this agenda" confirmLabel="Clear agenda?" onConfirm={() => { setPlan(null); setNotice(""); }} withText /></div>
       </div>
-      <div className="plan-meta"><span><Sparkles className="size-3" />{plan.meta.model}</span><span>{plan.meta.toolCalls} agent tool calls</span><span>{plan.meta.goalsLinked} goals linked · {plan.meta.goalsCreated} created</span><span>{plan.meta.blocksScheduled} blocks scheduled</span><span>{(plan.meta.latencyMs / 1000).toFixed(1)}s</span></div>
       {plan.goals.length > 0 && <div className="agenda-goals">{plan.goals.map((goal) => <span key={`${goal.title}-${goal.category}`}><Goal className="size-3" />{goal.title}<i>{goal.category}</i></span>)}</div>}
       <div className="agenda-week">{groupByDay(plan.blocks).map((day) => <div className="agenda-day" key={day.label}>
         <span className="agenda-day-label">{day.label}</span>
@@ -483,7 +427,6 @@ function WeekView({ goals, setGoals, plan, setPlan, reflections, onSpeak }: { go
       </div>)}</div>
     </article>}
 
-    {plan && <PlannerEvidence plan={plan} goals={goals} brief={brief} />}
   </section>;
 }
 
@@ -516,55 +459,6 @@ function MomentumStrip({ reflections, plan }: { reflections: Reflection[]; plan:
     <div><span>Week completed</span><b>{stats.completion}%</b><i>{stats.total} blocks</i></div>
     {stats.trend && <div><span>Capacity trend</span><b>{stats.trend}</b></div>}
   </div>;
-}
-
-/** Measured model advantage: the agentic plan against a single-shot baseline, scored in code. */
-function PlannerEvidence({ plan, goals, brief }: { plan: WeekPlan; goals: GoalItem[]; brief: string }) {
-  const compare = useServerFn(comparePlanners);
-  const [result, setResult] = useStoredState<BenchmarkResult | null>("sensus-benchmark", null);
-  const [running, setRunning] = useState(false);
-  const reflection = brief.trim().length >= 40 ? brief.trim() : plan.summary;
-  const run = async () => {
-    if (running) return;
-    setRunning(true);
-    try {
-      const response = await compare({
-        data: {
-          reflection,
-          goals: goals.map(({ id, title, category }) => ({ id, title, category })),
-          plan: { latencyMs: plan.meta.latencyMs, blocks: plan.blocks.map(({ title, goalTitle, startsAt, durationMinutes }) => ({ title, goalTitle, startsAt, durationMinutes })) },
-        },
-      });
-      setResult(response);
-      if (response.ok) toast.success("Comparison measured against the single-shot baseline.");
-      else toast.error(response.error);
-    } catch { toast.error("The comparison is unavailable right now."); }
-    finally { setRunning(false); }
-  };
-  return <article className="evidence-card">
-    <div className="evidence-head">
-      <div><span className="mini-label"><Gauge className="size-3.5" /> MEASURED ADVANTAGE</span><h2>Why this plan holds up</h2><p>Sensus runs the same reflection through a single-shot planner with no tools and no access to your goals, then scores both plans in code: goal grounding (40), schedulability (30), spread across days (20), recovery block (10).</p></div>
-      <Button variant="glass" onClick={run} disabled={running}>{running ? <LoaderCircle className="size-4 animate-spin" /> : <Gauge className="size-4" />}{running ? "Measuring" : result ? "Re-run comparison" : "Run the comparison"}</Button>
-    </div>
-    <div aria-live="polite">{result?.ok === false && <p className="error-text">{result.error}</p>}
-      {result?.ok && <>
-        <div className="evidence-grid">{[result.agentic, result.baseline].map((score) => <div key={score.label} className={score === result.agentic ? "evidence-column winner" : "evidence-column"}>
-          <span className="evidence-label">{score.label}</span>
-          <strong>{score.score.toFixed(0)}<i>/100</i></strong>
-          <ul>
-            <li><span>Blocks</span><b>{score.blocks}</b></li>
-            <li><span>Grounded in your goals</span><b>{score.linkedToGoals}/{score.blocks}</b></li>
-            <li><span>Schedulable as given</span><b>{score.schedulable}/{score.blocks}</b></li>
-            <li><span>Days covered</span><b>{score.daysCovered}</b></li>
-            <li><span>Recovery blocks</span><b>{score.recoveryBlocks}</b></li>
-            <li><span>Latency</span><b>{(score.latencyMs / 1000).toFixed(1)}s</b></li>
-          </ul>
-        </div>)}</div>
-        <p className="evidence-verdict"><Sparkles className="size-3.5" />{result.verdict}</p>
-        <p className="evidence-stamp">Measured {new Date(result.measuredAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} · scoring is deterministic and runs on your own reflection.</p>
-      </>}
-    </div>
-  </article>;
 }
 
 function groupByDay(blocks: WeekPlan["blocks"]) {
