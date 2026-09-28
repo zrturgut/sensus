@@ -45,3 +45,8 @@
 - [x] Momentum strip: reflection streak, reflections logged, week completion, capacity trend
 - [x] Toast feedback for planning, scheduling, comparison, and copy actions
 - [x] Removed the per-goal Progress tab (per-goal stats stay visible on Dashboard/My Week)
+
+## Real-app cleanup
+- [x] Removed all mock data (demo clarity map, demo week, example reflection, seed goals) and purged previously saved demo data
+- [x] Removed hackathon-only panels: planner comparison benchmark and model/latency stats row
+- [x] Analysis no longer falls back to fabricated results; shows an honest error instead
